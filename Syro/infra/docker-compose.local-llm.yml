@@ -1,0 +1,43 @@
+# Profil pour utiliser Ollama local (gratuit, local)
+
+services:
+  # Ollama pour LLM local
+  ollama:
+    image: ollama/ollama:latest
+    container_name: syro-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - syro-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Override API pour utiliser Ollama
+  syro-api:
+    environment:
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  # Override Worker pour utiliser Ollama
+  syro-worker:
+    environment:
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+volumes:
+  ollama_data:
+    driver: local
+

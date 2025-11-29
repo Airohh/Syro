@@ -1,0 +1,160 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  
+  html {
+    @apply h-full;
+  }
+  
+  body {
+    @apply bg-white text-gray-900 font-sans antialiased h-full;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Scrollbar moderne (style Cursor) */
+  ::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+  
+  /* Selection */
+  ::selection {
+    @apply bg-primary-100 text-primary-900;
+  }
+}
+
+@layer components {
+  /* Buttons - Design moderne */
+  .btn-primary {
+    @apply bg-gray-900 text-white px-4 py-2.5 rounded-lg hover:bg-gray-800 
+           transition-all duration-200 font-medium text-sm shadow-soft 
+           active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed
+           flex items-center justify-center gap-2;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 
+           transition-all duration-200 font-medium text-sm border border-gray-200 
+           active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2;
+  }
+  
+  .btn-ghost {
+    @apply text-gray-600 hover:text-gray-900 hover:bg-gray-100 
+           px-3 py-2 rounded-lg transition-all duration-200
+           flex items-center justify-center gap-2;
+  }
+  
+  .btn-domain {
+    @apply px-3 py-2 rounded-lg transition-all duration-200 font-medium text-sm
+           flex items-center gap-2 shadow-soft hover:shadow-medium
+           active:scale-[0.98];
+  }
+  
+  /* Inputs - Style moderne */
+  .input-field {
+    @apply w-full px-4 py-2.5 border border-gray-200 rounded-lg 
+           focus:ring-2 focus:ring-gray-900 focus:border-transparent 
+           outline-none transition-all duration-200 bg-white
+           placeholder:text-gray-400 text-sm;
+  }
+  
+  .textarea-field {
+    @apply w-full px-4 py-3 border border-gray-200 rounded-lg 
+           focus:ring-2 focus:ring-gray-900 focus:border-transparent 
+           outline-none transition-all duration-200 bg-white resize-none
+           placeholder:text-gray-400 text-sm font-sans leading-relaxed;
+  }
+  
+  /* Cards */
+  .card {
+    @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6;
+  }
+  
+  .card-hover {
+    @apply card hover:shadow-medium transition-all duration-200 cursor-pointer;
+  }
+  
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium;
+  }
+  
+  .badge-primary {
+    @apply badge bg-primary-100 text-primary-700;
+  }
+  
+  /* Chat specific */
+  .chat-bubble-user {
+    @apply bg-gray-900 text-white rounded-2xl px-4 py-3 shadow-soft;
+  }
+  
+  .chat-bubble-assistant {
+    @apply bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-soft;
+  }
+  
+  /* Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-in;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  .animate-slide-down {
+    animation: slideDown 0.3s ease-out;
+  }
+  
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md border border-gray-200/50;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Domain specific utilities */
+  .domain-gradient-tech {
+    @apply bg-gradient-to-r from-blue-500 to-blue-600;
+  }
+  
+  .domain-gradient-medical {
+    @apply bg-gradient-to-r from-emerald-500 to-emerald-600;
+  }
+  
+  .domain-gradient-legal {
+    @apply bg-gradient-to-r from-violet-500 to-violet-600;
+  }
+  
+  .domain-gradient-finance {
+    @apply bg-gradient-to-r from-amber-500 to-amber-600;
+  }
+  
+  .domain-gradient-education {
+    @apply bg-gradient-to-r from-pink-500 to-pink-600;
+  }
+}

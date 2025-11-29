@@ -1,0 +1,18 @@
+# Configuration Prometheus pour Syro
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # API Syro
+  - job_name: 'syro-api'
+    static_configs:
+      - targets: ['syro-api:8000']
+    metrics_path: '/metrics'
+    
+  # Worker Syro (si expose des métriques)
+  - job_name: 'syro-worker'
+    static_configs:
+      - targets: ['syro-worker:8001']  # Si le worker expose un endpoint metrics
+    metrics_path: '/metrics'
+

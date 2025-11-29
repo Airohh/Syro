@@ -1,0 +1,60 @@
+# Dockerfile allégé (sans torch GPU) pour build rapide
+# Multi-stage build pour backend Syro API
+
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Installer dépendances système pour build
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier requirements et installer dépendances Python
+# Version allégée avec torch CPU-only
+COPY requirements-base.txt requirements-ml-light.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --user -r requirements-base.txt && \
+    pip install --no-cache-dir --user --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-ml-light.txt
+
+# Stage runtime
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copier dépendances Python depuis builder
+COPY --from=builder /root/.local /root/.local
+
+# Installer curl pour healthcheck
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier code application
+COPY app/ ./app/
+COPY db/ ./db/
+
+# Créer répertoires nécessaires
+RUN mkdir -p /app/data /app/storage/mlruns
+
+# Créer utilisateur non-root
+RUN useradd -m -u 1000 syro && \
+    chown -R syro:syro /app
+
+USER syro
+
+# Ajouter .local au PATH pour Python
+ENV PATH=/root/.local/bin:$PATH
+
+# Exposer port
+EXPOSE 8000
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+

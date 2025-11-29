@@ -1,0 +1,68 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: syro-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - syro-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: syro-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DOMAIN=${DOMAIN:-general}
+      - QDRANT_URL=http://qdrant:6333
+      - DB_PATH=/app/data/syro.db
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./db:/app/db
+      - api_data:/app/data
+      - mlflow_data:/app/storage/mlruns
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.0
+    container_name: syro-mlflow
+    ports:
+      - "5000:5000"
+    command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow
+    volumes:
+      - mlflow_data:/mlflow
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
+    driver: local
+  api_data:
+    driver: local
+  mlflow_data:
+    driver: local
+
+networks:
+  syro-network:
+    driver: bridge
+

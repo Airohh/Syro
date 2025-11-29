@@ -1,0 +1,65 @@
+# Docker Compose pour développement rapide (sans build des images)
+# Utilise les images pré-existantes ou démarre sans build
+
+services:
+  # Services externes uniquement (pas de build)
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: syro-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: syro-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: syro-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=syro
+      - POSTGRES_USER=syro
+      - POSTGRES_PASSWORD=syro
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.0
+    container_name: syro-mlflow
+    ports:
+      - "5000:5000"
+    command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow
+    volumes:
+      - mlflow_data:/mlflow
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
+  redis_data:
+  postgres_data:
+  mlflow_data:
+
+networks:
+  syro-network:
+    driver: bridge
+

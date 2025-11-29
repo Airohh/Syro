@@ -1,0 +1,8 @@
+{
+  "target": "es2020",
+  "format": "esm",
+  "logOverride": {
+    "this-is-undefined-in-esm": "silent"
+  }
+}
+

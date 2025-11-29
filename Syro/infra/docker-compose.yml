@@ -1,0 +1,227 @@
+services:
+  # Backend API unique multi-domaines
+  syro-api:
+    build:
+      context: ..
+      dockerfile: infra/docker/api/Dockerfile
+    container_name: syro-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DOMAIN=${DOMAIN:-general}
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_TASK_ALWAYS_EAGER=False
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - DB_PATH=/app/data/syro.db
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-nomic-embed-text}
+      - CHAT_MODEL=${CHAT_MODEL:-llama3.2}
+      - MLOPS_ENABLED=${MLOPS_ENABLED:-True}
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+    volumes:
+      - api_data:/app/data
+      - api_db:/app/db
+      - mlflow_data:/app/storage/mlruns
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - syro-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Worker Celery (ingestion async)
+  syro-worker:
+    build:
+      context: ..
+      dockerfile: infra/docker/worker/Dockerfile
+    container_name: syro-worker
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - DB_PATH=/app/data/syro.db
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-nomic-embed-text}
+      - CHAT_MODEL=${CHAT_MODEL:-llama3.2}
+    volumes:
+      - api_data:/app/data
+      - api_db:/app/db
+      - mlflow_data:/app/storage/mlruns
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - syro-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "celery", "-A", "worker.main", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend React
+  syro-frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../infra/docker/frontend/Dockerfile
+    container_name: syro-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - syro-api
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: syro-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    networks:
+      - syro-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Redis (pour future queue worker)
+  redis:
+    image: redis:7-alpine
+    container_name: syro-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - syro-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Postgres (optionnel, pour remplacer SQLite)
+  postgres:
+    image: postgres:16-alpine
+    container_name: syro-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-syro}
+      - POSTGRES_USER=${POSTGRES_USER:-syro}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-syro}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - syro-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus (optionnel - décommenter pour activer)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheus_data:/prometheus
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #   networks:
+  #     - syro-network
+  #   restart: unless-stopped
+
+  # Grafana (optionnel - décommenter pour activer)
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: grafana
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #     - GF_SECURITY_ADMIN_USER=admin
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #   networks:
+  #     - syro-network
+  #   depends_on:
+  #     - prometheus
+  #   restart: unless-stopped
+
+  # MLflow Tracking
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.0
+    container_name: syro-mlflow
+    ports:
+      - "5000:5000"
+    command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow
+    volumes:
+      - mlflow_data:/mlflow
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
+    driver: local
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  api_data:
+    driver: local
+  api_db:
+    driver: local
+  mlflow_data:
+    driver: local
+  # prometheus_data:  # Décommenter si Prometheus est activé
+  #   driver: local
+  # grafana_data:  # Décommenter si Grafana est activé
+  #   driver: local
+
+networks:
+  syro-network:
+    driver: bridge
+

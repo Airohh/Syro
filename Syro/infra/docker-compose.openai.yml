@@ -1,0 +1,14 @@
+# Profil pour utiliser OpenAI (cloud, payant)
+
+services:
+  # Override API pour utiliser OpenAI
+  syro-api:
+    environment:
+      - LLM_PROVIDER=openai
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+    # Pas de dépendance Ollama
+    depends_on:
+      - qdrant
+      - postgres
+

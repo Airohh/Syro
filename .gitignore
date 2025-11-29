@@ -1,0 +1,125 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Syro instances
+Syro*/db/*.db
+Syro*/db/*.db-journal
+Syro*/db/*.db-shm
+Syro*/db/*.db-wal
+Syro*/storage/*
+!Syro*/storage/.gitkeep
+!Syro*/storage/tmp/.gitkeep
+
+# Dossier local (scripts de développement, non destinés à GitHub)
+local/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+.tox/
+.hypothesis/
+
+# Documentation builds
+docs/_build/
+site/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# MLflow
+mlruns/
+.mlflow/
+
+# Development documentation and scripts
+.dev/
+PLAN_*.md
+TODO_*.md
+CHECKS_*.md
+RESUME_*.md
+HISTORIQUE_*.md
+*_CRITIQUE_*.md
+*_PARTAGE_*.md
+RAPPORT_VERIFICATION_*.md
+verifier_*.py
+check_*.py
+test_upload_*.py
+analyser_*.py
+verification_*.py
+verification_*.txt
+
+# Frontend development files
+**/test-*.bat
+**/diagnostic-*.bat
+**/diagnostiquer-*.vbs
+**/syro-progress.hta
+**/syro-startup-*.log
+!**/syro-startup.log
+
+# Frontend dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Alternative frontend components (not used)
+**/ChatPageAlt*.tsx
+
+# Frontend scripts Windows spécifiques
+**/*.vbs
+**/*.hta
+**/*.lock
+**/syro-*.log
+**/test-*.js
+
+# Archive folders
+archive/
+ancien/
