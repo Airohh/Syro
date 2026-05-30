@@ -7,6 +7,7 @@ import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import { domainService } from '../services/api';
 import { getDomainConfig } from '../utils/domainConfig';
+import { useLocalConversations } from '../hooks/useLocalConversations';
 
 interface ChatPageProps {
   onLogout: () => void;
@@ -17,22 +18,27 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [currentDomain, setCurrentDomain] = useState<string>('general');
-  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_selectedId, setSelectedId] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  const { conversations, save, update, remove } = useLocalConversations();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Save/update conversation whenever messages change (not when loading history)
+  useEffect(() => {
+    if (isLoadingHistory || messages.length === 0) return;
+    if (conversationId) {
+      update(conversationId, messages);
+    } else {
+      const newId = save(messages);
+      if (newId) setConversationId(newId);
+    }
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const loadDomain = async () => {
       try {
         const data = await domainService.getDomains('general');
-        if (data.current_domain) {
-          setCurrentDomain(data.current_domain);
-        } else {
-          setCurrentDomain('general');
-        }
+        setCurrentDomain(data.current_domain || 'general');
       } catch {
         setCurrentDomain('general');
       }
@@ -43,17 +49,10 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
   useEffect(() => {
     setMessages([]);
     setConversationId(null);
-    setSelectedId(null);
-    setCurrentConversationId(null);
-    setIsLoadingConversation(false);
   }, [currentDomain]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
   const handleSend = async (content: string) => {
@@ -64,7 +63,7 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
       role: 'user',
       content,
     };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setLoading(true);
 
     try {
@@ -76,64 +75,33 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
         sources: response.sources,
         usage: response.usage,
       };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setConversationId(response.conversation_id);
-      if (!currentConversationId) {
-        setCurrentConversationId(response.conversation_id);
-      }
+      setMessages(prev => [...prev, assistantMessage]);
+      if (!conversationId) setConversationId(response.conversation_id);
     } catch (error: any) {
       const errorMsg = error?.userMessage || error?.message || 'Désolé, une erreur est survenue.';
       const errorSolution = error?.solution ? `\n\n💡 ${error.solution}` : '';
-      const errorAction = error?.action ? `\n\n${error.action}` : '';
-
-      const errorMessage: Message = {
+      setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: `**Erreur**\n\n${errorMsg}${errorSolution}${errorAction}`,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+        content: `**Erreur**\n\n${errorMsg}${errorSolution}`,
+      }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePromptClick = (prompt: string) => {
-    handleSend(prompt);
-  };
-
   const handleNewConversation = () => {
     setMessages([]);
     setConversationId(null);
-    setSelectedId(null);
-    setCurrentConversationId(null);
-    setIsLoadingConversation(false);
+    setIsLoadingHistory(false);
   };
 
-  const handleSelectConversation = (msgs: Message[], convId?: string) => {
-    setIsLoadingConversation(true);
+  const handleSelectConversation = (msgs: Message[], convId: string) => {
+    setIsLoadingHistory(true);
     setMessages(msgs.map(m => ({ ...m, id: m.id || crypto.randomUUID() })));
-    setSelectedId(convId || null);
-    setCurrentConversationId(convId || null);
-    setTimeout(() => setIsLoadingConversation(false), 100);
+    setConversationId(convId);
+    setTimeout(() => setIsLoadingHistory(false), 100);
   };
-
-  useEffect(() => {
-    if (isLoadingConversation || messages.length === 0) return;
-    if (currentConversationId && (window as any).updateConversation) {
-      (window as any).updateConversation(currentConversationId, messages);
-    } else if ((window as any).saveConversation) {
-      const newId = (window as any).saveConversation(messages);
-      if (newId) {
-        setCurrentConversationId(newId);
-        setSelectedId(newId);
-      }
-    }
-  }, [messages, isLoadingConversation, currentConversationId]);
-
-  useEffect(() => {
-    (window as any).onNewConversation = handleNewConversation;
-    return () => { delete (window as any).onNewConversation; };
-  }, []);
 
   const domain = getDomainConfig(currentDomain);
 
@@ -144,6 +112,8 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
         currentDomain={currentDomain}
         onNewConversation={handleNewConversation}
         onSelectConversation={handleSelectConversation}
+        conversations={conversations}
+        onDeleteConversation={remove}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -152,16 +122,12 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
           onDomainChange={setCurrentDomain}
         />
 
-        {/* Messages area */}
-        <div
-          ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto"
-        >
+        <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
             {messages.length === 0 ? (
               <EmptyState
                 domainId={currentDomain}
-                onPromptClick={handlePromptClick}
+                onPromptClick={handleSend}
               />
             ) : (
               <>

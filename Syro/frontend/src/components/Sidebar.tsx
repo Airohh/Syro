@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, LogOut, User, Wifi } from 'lucide-react';
-import { domainService } from '../services/api';
+import { domainService, Message } from '../services/api';
 import { getDomainConfig } from '../utils/domainConfig';
 import { getDomainClasses } from '../utils/domainStyles';
 import ConversationHistory from './ConversationHistory';
 import DocumentUpload from './DocumentUpload';
 import BackendStatus from './BackendStatus';
+import { Conversation } from '../hooks/useLocalConversations';
 
 interface SidebarProps {
   onLogout: () => void;
   currentDomain?: string;
   onNewConversation?: () => void;
-  onSelectConversation?: (messages: any[], conversationId?: string) => void;
+  onSelectConversation?: (messages: Message[], conversationId: string) => void;
+  conversations?: Conversation[];
+  onDeleteConversation?: (id: string) => void;
 }
 
 export default function Sidebar({
@@ -20,6 +23,8 @@ export default function Sidebar({
   currentDomain = 'general',
   onNewConversation,
   onSelectConversation,
+  conversations = [],
+  onDeleteConversation,
 }: SidebarProps) {
   const navigate = useNavigate();
   const [health, setHealth] = useState<{ status: string; domain?: string; app_name?: string } | null>(null);
@@ -111,7 +116,9 @@ export default function Sidebar({
         {/* Conversation history */}
         {onNewConversation && onSelectConversation && (
           <ConversationHistory
-            onSelectConversation={onSelectConversation}
+            conversations={conversations}
+            onSelect={onSelectConversation}
+            onDelete={onDeleteConversation ?? (() => {})}
             onNewConversation={onNewConversation}
           />
         )}
