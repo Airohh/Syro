@@ -17,6 +17,20 @@ services:
     networks:
       - syro-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: syro-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - syro-network
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -31,11 +45,41 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
       - ./db:/app/db
       - api_data:/app/data
       - mlflow_data:/app/storage/mlruns
     depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - syro-network
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: syro-worker
+    command: celery -A app.worker worker --loglevel=info --concurrency=2
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - DB_PATH=/app/data/syro.db
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./db:/app/db
+      - api_data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
       qdrant:
         condition: service_healthy
     networks:
@@ -65,4 +109,3 @@ volumes:
 networks:
   syro-network:
     driver: bridge
-

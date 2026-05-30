@@ -16,23 +16,35 @@ from ..services.file_extractor import detect_source_type, extract_text_from_byte
 from ..services.document_classifier import classify_document, should_ask_confirmation
 from ..schemas import DocumentUploadWithClassificationResponse
 from ..db import get_db
+from ..domains import DOMAINS
 from ..security import (
     MAX_FILE_SIZE,
     MAX_TEXT_SIZE,
 )
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-
-# Router pour routes multi-domaines
 domain_router = APIRouter(prefix="/domains/{domain}/documents", tags=["documents"])
+
+@router.get("")
+def list_documents(
+    org=Depends(require_active_org(0)),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    docs = db.execute(
+        """SELECT id, filename, mime_type, ingestion_status, chunk_count, created_at, tags, source_type
+           FROM documents WHERE organization_id = ? AND status = 'active'
+           ORDER BY created_at DESC""",
+        (org["id"],),
+    ).fetchall()
+    return {"documents": [dict(d) for d in docs]}
 
 @router.post("/text", response_model=DocumentUploadResponse)
 def upload_text_document(
+    background_tasks: BackgroundTasks,
     payload: DocumentTextUpload = Body(...),
     org = Depends(require_active_org(0)),
     user = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     _: bool = Depends(enforce_rate_limit("documents")),
 ):
     title = payload.title
@@ -67,25 +79,28 @@ def upload_text_document(
 
 @router.post("/files", response_model=DocumentUploadResponse)
 async def upload_file(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     tags: str | None = None,
     org = Depends(require_active_org(0)),
     user = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     _: bool = Depends(enforce_rate_limit("documents")),
 ):
     try:
-        content_bytes = await file.read()
-        
-        # Valider le fichier
+        max_size = settings.max_file_size_mb * 1024 * 1024
         if settings.enable_file_validation:
-            from ..security.upload_validator import validate_file_size
-            validate_file_size(file, max_size=settings.max_file_size_mb * 1024 * 1024)
-            sanitized_filename = file.filename or "unnamed"
+            content_bytes = await file.read(max_size + 1)
+            if len(content_bytes) > max_size:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Fichier trop volumineux. Taille maximale : {settings.max_file_size_mb} MB.",
+                )
         else:
-            sanitized_filename = file.filename or "unnamed"
-        
+            content_bytes = await file.read()
+        import os
+        sanitized_filename = os.path.basename(file.filename or "unnamed")
+
         sanitized_name = f"{uuid.uuid4()}_{sanitized_filename}"
         storage_path = settings.data_dir / str(org["id"]) / sanitized_name
         storage_path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,15 +134,15 @@ async def upload_file(
 
 @router.post("/upload-with-classification", response_model=DocumentUploadWithClassificationResponse)
 async def upload_file_with_classification(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    tags: str | None = Form(None),  # Utiliser Form() avec None comme défaut
-    domain: str | None = Form(None),  # Utiliser Form() avec None comme défaut
-    access_level_id: str | None = Form(None),  # Accepter string (FormData envoie des strings)
-    quality_level_id: str | None = Form(None),  # Accepter string (FormData envoie des strings)
+    tags: str | None = Form(None),
+    domain: str | None = Form(None),
+    access_level_id: str | None = Form(None),
+    quality_level_id: str | None = Form(None),
     org = Depends(require_active_org(0)),
     user = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     _: bool = Depends(enforce_rate_limit("documents")),
 ):
     """
@@ -167,16 +182,18 @@ async def upload_file_with_classification(
         except (ValueError, TypeError):
             quality_level_id = 1
     
-    content_bytes = await file.read()
-    
-    # Valider le fichier
+    max_size = settings.max_file_size_mb * 1024 * 1024
     if settings.enable_file_validation:
-        from ..security.upload_validator import validate_file_size
-        validate_file_size(file, max_size=settings.max_file_size_mb * 1024 * 1024)
-        sanitized_filename = file.filename or "unnamed"
+        content_bytes = await file.read(max_size + 1)
+        if len(content_bytes) > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Fichier trop volumineux. Taille maximale : {settings.max_file_size_mb} MB.",
+            )
     else:
-        sanitized_filename = file.filename or "unnamed"
-    
+        content_bytes = await file.read()
+    sanitized_filename = file.filename or "unnamed"
+
     # Classification automatique si domaine non fourni
     # OPTIMISATION: Ne pas extraire le texte ici pour les gros fichiers (bloquant)
     # La classification se fera en arrière-plan si nécessaire
@@ -269,6 +286,11 @@ def get_document_status_domain(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Récupérer le statut d'ingestion d'un document (route multi-domaines)."""
+    if domain not in DOMAINS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Domain '{domain}' not found. Available: {list(DOMAINS.keys())}",
+        )
     doc = db.execute(
         "SELECT ingestion_status, ingestion_error, chunk_count FROM documents WHERE id = ? AND organization_id = ?",
         (document_id, org["id"]),

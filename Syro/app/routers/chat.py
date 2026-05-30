@@ -4,6 +4,7 @@ import sqlite3
 import logging
 
 from ..dependencies import enforce_rate_limit, get_current_user, require_active_org
+from ..domains import DOMAINS
 from ..schemas import MessageCreate, MessageResponse
 from ..services.chat import (
     build_answer,
@@ -85,22 +86,27 @@ def send_message_stream(
 
     def generate():
         full_answer = ""
-        for chunk in build_answer_stream(org["id"], payload.content):
-            full_answer += chunk
-            yield f"data: {chunk}\n\n"
+        try:
+            for chunk in build_answer_stream(org["id"], payload.content):
+                full_answer += chunk
+                yield f"data: {chunk}\n\n"
 
-        # Store complete answer et usage approximatif
-        store_message(db, conversation_id, "assistant", full_answer, None)
-        usage = len(full_answer.split()) + len(payload.content.split())
-        db.execute(
-            "INSERT INTO usage_events (organization_id, user_id, event_type, amount, metadata) VALUES (?, ?, ?, ?, ?)",
-            (org["id"], user["id"], "chat_completion", usage, None),
-        )
-        db.execute(
-            "UPDATE organizations SET credit_balance = MAX(credit_balance - ?, 0) WHERE id = ?",
-            (usage, org["id"]),
-        )
-        yield "data: [DONE]\n\n"
+            store_message(db, conversation_id, "assistant", full_answer, None)
+            usage = len(full_answer.split()) + len(payload.content.split())
+            db.execute(
+                "INSERT INTO usage_events (organization_id, user_id, event_type, amount, metadata) VALUES (?, ?, ?, ?, ?)",
+                (org["id"], user["id"], "chat_completion", usage, None),
+            )
+            db.execute(
+                "UPDATE organizations SET credit_balance = MAX(credit_balance - ?, 0) WHERE id = ?",
+                (usage, org["id"]),
+            )
+            db.commit()
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            logger.error("Streaming error: %s", e, exc_info=True)
+            db.rollback()
+            yield f"data: [ERROR]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -119,6 +125,11 @@ def send_message_for_domain(
     - Le domaine est passé dans l'URL: /domains/{domain}/chat/message
     - Aucun auto-detect: le domaine est imposé.
     """
+    if domain not in DOMAINS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Domain '{domain}' not found. Available: {list(DOMAINS.keys())}",
+        )
     conversation_id = create_conversation_if_needed(
         db, org["id"], payload.conversation_id
     )
@@ -139,6 +150,7 @@ def send_message_for_domain(
         "UPDATE organizations SET credit_balance = MAX(credit_balance - ?, 0) WHERE id = ?",
         (usage, org["id"]),
     )
+    db.commit()
     return MessageResponse(
         conversation_id=conversation_id,
         message=answer,
@@ -156,6 +168,11 @@ def send_message_stream_for_domain(
     _: bool = Depends(enforce_rate_limit("chat")),
 ):
     """Streaming multi-domaine explicite: /domains/{domain}/chat/message/stream."""
+    if domain not in DOMAINS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Domain '{domain}' not found. Available: {list(DOMAINS.keys())}",
+        )
     conversation_id = create_conversation_if_needed(
         db, org["id"], payload.conversation_id
     )
@@ -163,25 +180,31 @@ def send_message_stream_for_domain(
 
     def generate():
         full_answer = ""
-        for chunk in build_answer_stream(
-            organization_id=org["id"],
-            query=payload.content,
-            auto_detect_domain=False,
-            domain=domain,
-        ):
-            full_answer += chunk
-            yield f"data: {chunk}\n\n"
+        try:
+            for chunk in build_answer_stream(
+                organization_id=org["id"],
+                query=payload.content,
+                auto_detect_domain=False,
+                domain=domain,
+            ):
+                full_answer += chunk
+                yield f"data: {chunk}\n\n"
 
-        store_message(db, conversation_id, "assistant", full_answer, None)
-        usage = len(full_answer.split()) + len(payload.content.split())
-        db.execute(
-            "INSERT INTO usage_events (organization_id, user_id, event_type, amount, metadata) VALUES (?, ?, ?, ?, ?)",
-            (org["id"], user["id"], "chat_completion", usage, None),
-        )
-        db.execute(
-            "UPDATE organizations SET credit_balance = MAX(credit_balance - ?, 0) WHERE id = ?",
-            (usage, org["id"]),
-        )
-        yield "data: [DONE]\n\n"
+            store_message(db, conversation_id, "assistant", full_answer, None)
+            usage = len(full_answer.split()) + len(payload.content.split())
+            db.execute(
+                "INSERT INTO usage_events (organization_id, user_id, event_type, amount, metadata) VALUES (?, ?, ?, ?, ?)",
+                (org["id"], user["id"], "chat_completion", usage, None),
+            )
+            db.execute(
+                "UPDATE organizations SET credit_balance = MAX(credit_balance - ?, 0) WHERE id = ?",
+                (usage, org["id"]),
+            )
+            db.commit()
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            logger.error("Domain streaming error: %s", e, exc_info=True)
+            db.rollback()
+            yield f"data: [ERROR]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")

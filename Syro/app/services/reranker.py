@@ -43,8 +43,10 @@ class Reranker:
                     use_fp16=True,
                     device='cuda' if self._check_cuda() else 'cpu',
                 )
-                device_info = "GPU" if self._check_cuda() else "CPU"
-                print(f"Reranker loaded on {device_info}")
+                import logging as _logging
+                _logging.getLogger(__name__).info(
+                    "Reranker loaded on %s", "GPU" if self._check_cuda() else "CPU"
+                )
                 return self._model
             except Exception:
                 return None
@@ -97,8 +99,7 @@ class Reranker:
                 rerank_scores = model.compute_score(pairs)
             
             # Handle different return types from compute_score
-            import numpy as np
-            if isinstance(rerank_scores, np.ndarray):
+            if np is not None and isinstance(rerank_scores, np.ndarray):
                 rerank_scores = rerank_scores.tolist()
             elif isinstance(rerank_scores, (int, float)):
                 # Single score returned for multiple pairs (shouldn't happen but handle it)

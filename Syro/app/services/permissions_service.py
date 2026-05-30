@@ -179,42 +179,54 @@ def filter_documents_by_permissions(
         with db_session() as db:
             return filter_documents_by_permissions(user_id, organization_id, documents, db)
     
+    if not documents:
+        return []
+
     permissions = get_user_permissions(user_id, organization_id, db)
     if not permissions:
         return []
-    
+
     user_max_access = permissions.get("max_access_level_id", 1)
     user_min_quality = permissions.get("min_quality_level_id", 1)
-    
+
+    # Batch-load all shared document IDs in a single query (fixes N+1)
+    doc_ids = [doc["id"] for doc in documents]
+    placeholders = ",".join("?" * len(doc_ids))
+    shared_rows = db.execute(
+        f"""
+        SELECT document_id FROM document_shares
+        WHERE document_id IN ({placeholders})
+          AND shared_with_user_id = ?
+          AND (expires_at IS NULL OR expires_at > datetime('now'))
+        """,
+        (*doc_ids, user_id),
+    ).fetchall()
+    shared_doc_ids = {row["document_id"] for row in shared_rows}
+
     filtered = []
     for doc in documents:
+        doc_id = doc["id"]
         doc_access_level = doc.get("access_level_id") or 1
         doc_quality_level = doc.get("quality_level_id") or 1
-        
-        # Vérifier les niveaux
+
+        # Creator always has access
+        if doc.get("created_by_user_id") == user_id:
+            filtered.append(doc)
+            continue
+
+        # Explicit share overrides access-level restrictions
+        if doc_id in shared_doc_ids:
+            filtered.append(doc)
+            continue
+
+        # Apply permission-level gates
         if doc_access_level > user_max_access:
             continue
         if doc_quality_level < user_min_quality:
             continue
-        
-        # Vérifier les partages directs
-        if doc.get("created_by_user_id") != user_id:
-            share = db.execute(
-                """
-                SELECT id FROM document_shares
-                WHERE document_id = ? AND shared_with_user_id = ?
-                AND (expires_at IS NULL OR expires_at > datetime('now'))
-                """,
-                (doc["id"], user_id)
-            ).fetchone()
-            
-            if not share and doc_access_level > 1:
-                # Si pas de partage et document non-public, vérifier les permissions
-                if doc_access_level > user_max_access:
-                    continue
-        
+
         filtered.append(doc)
-    
+
     return filtered
 
 def get_access_level_name(access_level_id: int, db: sqlite3.Connection | None = None) -> str:

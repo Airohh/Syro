@@ -43,6 +43,12 @@ class VectorStore:
         return f"{base_name}_{domain}_chunks"
 
     def _get_client(self) -> QdrantClient:
+        if self._client is not None:
+            try:
+                self._client.get_collections()
+            except Exception:
+                self._client = None
+
         if self._client is None:
             try:
                 self._client = QdrantClient(
@@ -53,9 +59,10 @@ class VectorStore:
                 self._client.get_collections()
                 self._connection_checked = True
             except Exception as e:
+                self._client = None
                 error_msg = f"Failed to connect to Qdrant at {settings.qdrant_url}: {str(e)}"
                 raise VectorStoreError(error_msg) from e
-        
+
         return self._client
 
     def _ensure_collection(self, collection_name: str | None = None) -> None:

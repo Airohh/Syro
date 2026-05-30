@@ -125,7 +125,7 @@ def get_storage_stats(organization_id: int, db: sqlite3.Connection | None = None
         if row[0] and os.path.exists(row[0]):
             try:
                 total_bytes += os.path.getsize(row[0])
-            except:
+            except OSError:
                 pass
     if total_bytes == 0:
         total_bytes = len(rows) * 100 * 1024
@@ -142,22 +142,31 @@ def get_usage_stats(organization_id: int, db: sqlite3.Connection | None = None) 
         with db_session() as db:
             return get_usage_stats(organization_id, db)
     
-    # Conversations
+    # Conversations (join via conversations table which holds organization_id)
     conversations = db.execute(
-        "SELECT COUNT(DISTINCT conversation_id) FROM messages WHERE organization_id = ?",
+        """SELECT COUNT(DISTINCT m.conversation_id)
+           FROM messages m
+           JOIN conversations c ON c.id = m.conversation_id
+           WHERE c.organization_id = ?""",
         (organization_id,)
     ).fetchone()[0] or 0
-    
+
     # Messages
     messages = db.execute(
-        "SELECT COUNT(*) FROM messages WHERE organization_id = ?",
+        """SELECT COUNT(*)
+           FROM messages m
+           JOIN conversations c ON c.id = m.conversation_id
+           WHERE c.organization_id = ?""",
         (organization_id,)
     ).fetchone()[0] or 0
-    
+
     # Conversations récentes (7 jours)
     seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
     recent_conversations = db.execute(
-        "SELECT COUNT(DISTINCT conversation_id) FROM messages WHERE organization_id = ? AND created_at >= ?",
+        """SELECT COUNT(DISTINCT m.conversation_id)
+           FROM messages m
+           JOIN conversations c ON c.id = m.conversation_id
+           WHERE c.organization_id = ? AND m.created_at >= ?""",
         (organization_id, seven_days_ago)
     ).fetchone()[0] or 0
     

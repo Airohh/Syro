@@ -99,7 +99,7 @@ def get_user_permissions_endpoint(
         **permissions
     )
 
-@router.put("/users/{user_id}", response_model=UserPermissions)
+@router.put("/users/{user_id}")
 def update_user_permissions(
     user_id: int,
     payload: UserPermissionsUpdate,
@@ -161,27 +161,31 @@ def update_user_permissions(
         params.append(payload.can_export_data)
     
     if existing:
-        # Mettre à jour les permissions existantes
         if updates:
             params.extend([user_id, org["id"]])
             db.execute(
                 f"UPDATE user_permissions SET {', '.join(updates)} WHERE user_id = ? AND organization_id = ?",
-                params
+                params,
             )
             db.commit()
     else:
-        # Créer de nouvelles permissions
         if updates:
             insert_cols = ["user_id", "organization_id"] + [col.split(" = ")[0] for col in updates]
             insert_vals = [user_id, org["id"]] + params
             placeholders = ", ".join(["?"] * len(insert_vals))
             db.execute(
                 f"INSERT INTO user_permissions ({', '.join(insert_cols)}) VALUES ({placeholders})",
-                insert_vals
+                insert_vals,
             )
             db.commit()
-    
-    return {"message": "Permissions updated successfully"}
+        else:
+            # No payload provided — nothing to do
+            return {"message": "No fields to update"}
+
+    updated = get_user_permissions(user_id, org["id"], db)
+    if not updated:
+        return {"message": "Permissions updated successfully"}
+    return UserPermissions(user_id=user_id, organization_id=org["id"], **updated)
 
 @router.get("/documents/{document_id}/can-access")
 def check_document_access(

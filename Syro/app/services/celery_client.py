@@ -8,11 +8,7 @@ if TYPE_CHECKING:
     from celery import Celery
     from fastapi import BackgroundTasks
 
-# Lazy import pour éviter les erreurs si Celery n'est pas installé
 _celery_app: "Celery | None" = None
-
-# BackgroundTasks de FastAPI comme fallback (sera injecté depuis les routes)
-_background_tasks: Optional["BackgroundTasks"] = None
 
 def get_celery_app() -> "Celery":
     """Obtenir l'application Celery (singleton)."""
@@ -39,11 +35,6 @@ def get_celery_app() -> "Celery":
     
     return _celery_app
 
-def set_background_tasks(background_tasks: "BackgroundTasks") -> None:
-    """Définir les BackgroundTasks de FastAPI pour le fallback."""
-    global _background_tasks
-    _background_tasks = background_tasks
-
 def enqueue_document_ingestion(document_id: int, organization_id: int, storage_path: str, mime_type: str | None = None, domain: str | None = None, background_tasks: Optional["BackgroundTasks"] = None) -> str:
     """
     Enqueue une tâche d'ingestion de document.
@@ -62,22 +53,20 @@ def enqueue_document_ingestion(document_id: int, organization_id: int, storage_p
     # Si Celery est désactivé (mode dev), utiliser BackgroundTasks
     if settings.celery_task_always_eager:
         # Utiliser BackgroundTasks si disponible, sinon exécuter directement (non recommandé)
-        if background_tasks or _background_tasks:
+        if background_tasks:
             from ..services.ingestion import process_document
-            tasks = background_tasks or _background_tasks
-            tasks.add_task(process_document, document_id, organization_id, storage_path, mime_type, domain)
+            background_tasks.add_task(process_document, document_id, organization_id, storage_path, mime_type, domain)
             return "background-task-execution"
         else:
-            # Fallback: exécuter directement (bloquant, à éviter)
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning("Celery désactivé et BackgroundTasks non disponible, exécution synchrone (bloquante)")
+            logger.warning("Celery désactivé et BackgroundTasks non disponible, exécution synchrone")
             from ..services.ingestion import process_document
             try:
                 process_document(document_id, organization_id, storage_path, mime_type, domain)
                 return "eager-execution"
             except Exception as e:
-                logger.error(f"Erreur lors du traitement synchrone du document {document_id}: {e}", exc_info=True)
+                logger.error("Erreur traitement synchrone doc %s: %s", document_id, e, exc_info=True)
                 return "eager-execution-error"
     
     # Sinon, essayer d'utiliser Celery
@@ -95,19 +84,17 @@ def enqueue_document_ingestion(document_id: int, organization_id: int, storage_p
         logger.warning(f"Celery/Redis non disponible, basculement vers BackgroundTasks: {e}")
         
         # Utiliser BackgroundTasks de FastAPI (non-bloquant)
-        if background_tasks or _background_tasks:
+        if background_tasks:
             from ..services.ingestion import process_document
-            tasks = background_tasks or _background_tasks
-            tasks.add_task(process_document, document_id, organization_id, storage_path, mime_type, domain)
+            background_tasks.add_task(process_document, document_id, organization_id, storage_path, mime_type, domain)
             return "background-task-fallback"
         else:
-            # Dernier recours: exécuter directement (bloquant, à éviter)
-            logger.error("BackgroundTasks non disponible, exécution synchrone (bloquante)")
+            logger.error("BackgroundTasks non disponible, exécution synchrone")
             try:
                 from ..services.ingestion import process_document
                 process_document(document_id, organization_id, storage_path, mime_type, domain)
                 return "fallback-sync-execution"
             except Exception as process_error:
-                logger.error(f"Erreur lors du traitement synchrone de secours du document {document_id}: {process_error}", exc_info=True)
+                logger.error("Erreur traitement synchrone doc %s: %s", document_id, process_error, exc_info=True)
                 return "fallback-sync-execution-error"
 

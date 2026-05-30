@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Sequence
 
@@ -9,6 +10,8 @@ import numpy as np
 
 from ..db import db_session
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 from .llm import get_embedding_vector
 from .vector_store import VectorStore, VectorStoreError
 from .hybrid_search import hybrid_search
@@ -40,8 +43,8 @@ def index_document_content(
     
     try:
         vector_store.delete_chunks_by_document(document_id, domain=detected_domain)
-    except VectorStoreError:
-        pass
+    except VectorStoreError as e:
+        logger.warning("Could not delete existing chunks for doc %d: %s", document_id, e)
     
     with db_session() as conn:
         conn.execute("DELETE FROM doc_chunks WHERE document_id = ?", (document_id,))
@@ -74,8 +77,11 @@ def index_document_content(
                     metadata=chunk_metadata,
                     domain=detected_domain,
                 )
-            except VectorStoreError:
-                pass
+            except VectorStoreError as e:
+                logger.error(
+                    "Failed to index chunk %s (doc %d) in Qdrant — SQLite/Qdrant out of sync: %s",
+                    qdrant_chunk_id, document_id, e,
+                )
     
     bm25_search.mark_for_rebuild(organization_id)
     

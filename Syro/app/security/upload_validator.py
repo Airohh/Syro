@@ -54,11 +54,29 @@ class UploadValidationError(Exception):
 def validate_file_size(file: UploadFile, max_size: int = MAX_FILE_SIZE) -> None:
     """
     Valider la taille d'un fichier.
-    
+
     Args:
-        file: Fichier uploadé
+        file: Fichier uploadé (après lecture, file.size est disponible)
         max_size: Taille maximale en bytes
-    
+
     Raises:
         HTTPException: Si le fichier est trop gros
     """
+    size: int | None = getattr(file, "size", None)
+    if size is None:
+        # Fallback : lire la position courante du fichier sous-jacent
+        try:
+            f = file.file
+            current = f.tell()
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(current)
+        except Exception:
+            return  # Impossible de déterminer la taille, on laisse passer
+
+    if size > max_size:
+        max_mb = max_size // (1024 * 1024)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Fichier trop volumineux. Taille maximale : {max_mb} MB.",
+        )

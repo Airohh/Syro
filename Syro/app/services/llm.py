@@ -2,11 +2,14 @@
 
 import hashlib
 import io
+import logging
 import sys
 from collections import OrderedDict
 from typing import Sequence
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # Fix encoding for Windows console
 if sys.platform == "win32":
@@ -117,9 +120,9 @@ class LLMProvider:
                 temperature=settings.chat_temperature,
             )
             self._has_llm = True
-            print(f"Ollama configured: {settings.chat_model} at {base_url}{gpu_info}")
-        except Exception:
-            pass
+            logger.info("Ollama configured: %s at %s%s", settings.chat_model, base_url, gpu_info)
+        except Exception as e:
+            logger.warning("Ollama setup failed — embeddings and chat unavailable: %s", e)
     
     def _setup_openai(self) -> None:
         """Configure OpenAI (paid, cloud-based)."""
@@ -142,9 +145,9 @@ class LLMProvider:
                 temperature=settings.chat_temperature,
             )
             self._has_llm = True
-            print(f"OpenAI configured: {settings.chat_model}")
-        except Exception:
-            pass
+            logger.info("OpenAI configured: %s", settings.chat_model)
+        except Exception as e:
+            logger.warning("OpenAI setup failed — embeddings and chat unavailable: %s", e)
 
     @staticmethod
     def _fake_embed(text: str) -> np.ndarray:
@@ -161,13 +164,13 @@ class LLMProvider:
                 return _embedding_cache[cache_key]
         
         if self._embedder:
-            try:
-                vector = self._embedder.embed_query(text)
-                result = np.array(vector, dtype=np.float32)
-            except Exception:
-                result = self._fake_embed(text)
+            vector = self._embedder.embed_query(text)
+            result = np.array(vector, dtype=np.float32)
         else:
-            result = self._fake_embed(text)
+            raise RuntimeError(
+                "LLM provider not configured — cannot generate embeddings. "
+                "Check that Ollama is running or OPENAI_API_KEY is set."
+            )
         
         if settings.embedding_cache_enabled and _cache_max_size > 0 and cache_key:
             if len(_embedding_cache) >= _cache_max_size:
@@ -202,8 +205,8 @@ class LLMProvider:
                 if usage == 0:
                     usage = len(question.split()) + sum(len(chunk.split()) for chunk in context_chunks)
                 return text, usage
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("LLM invoke failed: %s", e, exc_info=True)
 
         provider_status = "Ollama unavailable" if self._provider == "ollama" else "LLM not configured"
         fallback = f"LLM unavailable ({provider_status}).\n\nQuestion: {question}\n\nContext:\n{context_block or 'No documents indexed.'}"
@@ -233,7 +236,7 @@ class LLMProvider:
                         yield chunk.content
             except Exception as e:
                 provider_name = "Ollama" if self._provider == "ollama" else "OpenAI"
-                print(f"Warning: {provider_name} chat stream failed ({e})")
+                logger.warning("%s stream failed: %s", provider_name, e)
                 yield f"Error: {provider_name} unavailable."
         else:
             yield "LLM not configured."

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -13,7 +14,8 @@ from .vector_store import VectorStore, VectorStoreError
 from .bm25_search import bm25_search
 from .reranker import reranker
 
-_executor = ThreadPoolExecutor(max_workers=2)
+_executor = ThreadPoolExecutor(max_workers=4)
+atexit.register(_executor.shutdown, wait=False)
 
 def normalize_scores(scores: list[float]) -> list[float]:
     if not scores:

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any
+
+_benchmark_lock = threading.Lock()
 
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
@@ -307,68 +310,66 @@ def run_benchmark(
         "results": [],
     }
     
-    original_mode = settings.performance_mode
-    
-    for mode in payload.modes:
-        if mode not in ["fast", "quality"]:
-            continue
-        
-        # Temporarily set performance mode
-        settings.performance_mode = mode
-        settings.apply_performance_mode()
-        
-        for query in payload.queries:
-            try:
-                start_time = time.time()
-                answer, usage, sources = build_answer(
-                    organization_id=org["id"],
-                    query=query,
-                    include_sources=payload.include_sources,
-                )
-                latency_ms = (time.time() - start_time) * 1000
-                
-                result = {
-                    "query": query,
-                    "mode": mode,
-                    "latency_ms": round(latency_ms, 2),
-                    "token_usage": usage,
-                    "answer_length": len(answer),
-                    "num_sources": len(sources) if payload.include_sources else 0,
-                    "success": True,
-                }
-                
-                # Log to MLflow if enabled
-                if tracker.enabled:
-                    avg_score = sum(s.get("score", 0.0) for s in sources) / max(len(sources), 1) if sources else 0.0
-                    tracker.log_retrieval_experiment(
-                        experiment_name="benchmark",
-                        params={
+    with _benchmark_lock:
+        original_mode = settings.performance_mode
+        try:
+            for mode in payload.modes:
+                if mode not in ["fast", "quality"]:
+                    continue
+
+                settings.performance_mode = mode
+                settings.apply_performance_mode()
+
+                for query in payload.queries:
+                    try:
+                        start_time = time.time()
+                        answer, usage, sources = build_answer(
+                            organization_id=org["id"],
+                            query=query,
+                            include_sources=payload.include_sources,
+                        )
+                        latency_ms = (time.time() - start_time) * 1000
+
+                        result = {
                             "query": query,
                             "mode": mode,
-                            "organization_id": str(org["id"]),
-                        },
-                        metrics={
-                            "latency_ms": latency_ms,
+                            "latency_ms": round(latency_ms, 2),
                             "token_usage": usage,
-                            "num_sources": len(sources),
-                            "avg_source_score": avg_score,
-                        },
-                        tags={"type": "benchmark", "mode": mode},
-                    )
-                
-                results["results"].append(result)
-            except Exception as e:
-                results["results"].append({
-                    "query": query,
-                    "mode": mode,
-                    "latency_ms": 0,
-                    "error": str(e),
-                    "success": False,
-                })
-        
-        # Restore original mode
-        settings.performance_mode = original_mode
-        settings.apply_performance_mode()
+                            "answer_length": len(answer),
+                            "num_sources": len(sources) if payload.include_sources else 0,
+                            "success": True,
+                        }
+
+                        if tracker.enabled:
+                            avg_score = sum(s.get("score", 0.0) for s in sources) / max(len(sources), 1) if sources else 0.0
+                            tracker.log_retrieval_experiment(
+                                experiment_name="benchmark",
+                                params={
+                                    "query": query,
+                                    "mode": mode,
+                                    "organization_id": str(org["id"]),
+                                },
+                                metrics={
+                                    "latency_ms": latency_ms,
+                                    "token_usage": usage,
+                                    "num_sources": len(sources),
+                                    "avg_source_score": avg_score,
+                                },
+                                tags={"type": "benchmark", "mode": mode},
+                            )
+
+                        results["results"].append(result)
+                    except Exception as e:
+                        results["results"].append({
+                            "query": query,
+                            "mode": mode,
+                            "latency_ms": 0,
+                            "error": str(e),
+                            "success": False,
+                        })
+        finally:
+            settings.performance_mode = original_mode
+            settings.apply_performance_mode()
     
     # Calculate statistics
     stats = {}

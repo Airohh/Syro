@@ -86,21 +86,25 @@ class RedisRateLimiter:
             # Fallback sur mémoire si Redis échoue
             return self._allow_memory(key)
     
+    _MAX_MEMORY_KEYS = 10_000
+
     def _allow_memory(self, key: str) -> tuple[bool, int]:
         """Rate limiting en mémoire (fallback)."""
         from collections import defaultdict, deque
         from typing import Deque, DefaultDict
-        
+
         if not hasattr(self, "_memory_store"):
             self._memory_store: DefaultDict[str, Deque[float]] = defaultdict(deque)
-        
+
         now = time.time()
         q = self._memory_store[key]
-        
-        # Supprimer les entrées expirées
+
         while q and now - q[0] > self.window:
             q.popleft()
-        
+
+        if len(self._memory_store) > self._MAX_MEMORY_KEYS and key not in self._memory_store:
+            return True, self.limit
+
         if len(q) < self.limit:
             q.append(now)
             return True, self.limit - len(q)

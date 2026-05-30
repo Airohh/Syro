@@ -43,10 +43,6 @@ def process_document_upload(self, document_id: int, organization_id: int, storag
         
         # Métriques Prometheus
         try:
-            import sys
-            from pathlib import Path
-            PROJECT_ROOT = Path(__file__).resolve().parent.parent
-            sys.path.insert(0, str(PROJECT_ROOT))
             from app.middleware import (
                 document_ingestions_total,
                 active_ingestions,
@@ -139,10 +135,6 @@ def process_document_upload(self, document_id: int, organization_id: int, storag
         
         # Métriques Prometheus
         try:
-            import sys
-            from pathlib import Path
-            PROJECT_ROOT = Path(__file__).resolve().parent.parent
-            sys.path.insert(0, str(PROJECT_ROOT))
             from app.middleware import (
                 document_ingestions_total,
                 document_ingestion_duration_seconds,
@@ -170,10 +162,6 @@ def process_document_upload(self, document_id: int, organization_id: int, storag
         
         # Métriques Prometheus pour erreur
         try:
-            import sys
-            from pathlib import Path
-            PROJECT_ROOT = Path(__file__).resolve().parent.parent
-            sys.path.insert(0, str(PROJECT_ROOT))
             from app.middleware import (
                 document_ingestions_total,
                 document_ingestion_duration_seconds,
