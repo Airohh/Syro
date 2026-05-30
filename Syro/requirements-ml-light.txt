@@ -1,0 +1,7 @@
+# ML dependencies (CPU-only torch via --extra-index-url pytorch.org/whl/cpu)
+# Installées séparément de requirements-base.txt pour optimiser le cache Docker
+
+numpy==1.26.4
+sentence-transformers==3.0.1
+FlagEmbedding==1.2.8
+mlflow==2.14.0
