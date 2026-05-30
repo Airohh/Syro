@@ -37,6 +37,7 @@ COPY --from=builder /root/.local /home/syro/.local
 # Copier code application
 COPY app/ ./app/
 COPY db/ ./db/
+COPY scripts/ ./scripts/
 
 # Créer répertoires nécessaires et définir permissions
 RUN mkdir -p /app/data /app/storage/mlruns && \
@@ -55,5 +56,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 

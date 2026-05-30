@@ -50,8 +50,8 @@ ENV PATH=/home/syro/.local/bin:$PATH
 
 # Healthcheck (vérifier que Celery répond)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD celery -A worker.main inspect ping || exit 1
+    CMD python -m celery -A worker.main inspect ping || exit 1
 
 # Run Celery worker
-CMD ["celery", "-A", "worker.main", "worker", "--loglevel=info"]
+CMD ["python", "-m", "celery", "-A", "worker.main", "worker", "--loglevel=info"]
 
