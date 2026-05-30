@@ -2,6 +2,7 @@
 Tests unitaires pour le service de recherche hybride.
 """
 
+import numpy as np
 import pytest
 from unittest.mock import patch, Mock
 
@@ -28,7 +29,7 @@ class TestHybridSearch:
         mock_settings.retrieval_top_k = 5
         mock_settings.hybrid_search_alpha = 0.5
         
-        mock_get_embedding.return_value = [0.1] * 384
+        mock_get_embedding.return_value = np.array([0.1] * 384)
         
         mock_vector_store = Mock()
         mock_vector_store_class.return_value = mock_vector_store
@@ -72,8 +73,11 @@ class TestHybridSearch:
     ):
         """Test recherche hybride avec filtres."""
         mock_settings.rerank_top_k = 5
-        
-        mock_get_embedding.return_value = [0.1] * 384
+        mock_settings.retrieval_top_k = 5
+        mock_settings.hybrid_search_alpha = 0.5
+        mock_settings.enable_reranking = False
+
+        mock_get_embedding.return_value = np.array([0.1] * 384)
         
         mock_vector_store = Mock()
         mock_vector_store_class.return_value = mock_vector_store
@@ -106,8 +110,11 @@ class TestHybridSearch:
     ):
         """Test recherche hybride sans résultats."""
         mock_settings.rerank_top_k = 5
-        
-        mock_get_embedding.return_value = [0.1] * 384
+        mock_settings.retrieval_top_k = 5
+        mock_settings.hybrid_search_alpha = 0.5
+        mock_settings.enable_reranking = False
+
+        mock_get_embedding.return_value = np.array([0.1] * 384)
         
         mock_vector_store = Mock()
         mock_vector_store_class.return_value = mock_vector_store
