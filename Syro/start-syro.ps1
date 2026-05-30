@@ -29,6 +29,18 @@ function Write-Ok   { param($msg) Write-Host "  OK $msg" -ForegroundColor Green 
 function Write-Warn { param($msg) Write-Host "  !! $msg" -ForegroundColor Yellow }
 function Write-Fail { param($msg) Write-Host "  XX $msg" -ForegroundColor Red }
 
+function Test-Port {
+  param([string]$h, [int]$p)
+  try {
+    $tcp = New-Object System.Net.Sockets.TcpClient
+    $ar  = $tcp.BeginConnect($h, $p, $null, $null)
+    $ok  = $ar.AsyncWaitHandle.WaitOne(1500, $false)
+    if ($ok) { $tcp.EndConnect($ar) }
+    $tcp.Close()
+    return $ok
+  } catch { return $false }
+}
+
 Write-Host ""
 Write-Host "  * SYRO - Starting up" -ForegroundColor Magenta
 Write-Host ""
@@ -117,11 +129,8 @@ if (-not $SkipDocker) {
 
     Write-Step "Waiting for Qdrant (port 6333)..."
     $qdrantReady = $false
-    for ($i = 0; $i -lt 20; $i++) {
-      try {
-        $r = Invoke-WebRequest -Uri "http://localhost:6333/" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue
-        if ($r.StatusCode -eq 200) { $qdrantReady = $true; break }
-      } catch { }
+    for ($i = 0; $i -lt 30; $i++) {
+      if (Test-Port "127.0.0.1" 6333) { $qdrantReady = $true; break }
       Start-Sleep -Seconds 1
     }
     if ($qdrantReady) { Write-Ok "Qdrant ready" } else { Write-Warn "Qdrant not responding - RAG search may fail" }
@@ -166,11 +175,8 @@ $backendJob = Start-Job -ScriptBlock {
 
 Write-Step "Waiting for backend..."
 $backendReady = $false
-for ($i = 0; $i -lt 30; $i++) {
-  try {
-    $r = Invoke-WebRequest -Uri "http://127.0.0.1:$BACKEND_PORT/health" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue
-    if ($r.StatusCode -eq 200) { $backendReady = $true; break }
-  } catch { }
+for ($i = 0; $i -lt 40; $i++) {
+  if (Test-Port "127.0.0.1" $BACKEND_PORT) { $backendReady = $true; break }
   Start-Sleep -Seconds 1
 }
 
@@ -192,11 +198,8 @@ $frontendJob = Start-Job -ScriptBlock {
 
 Write-Step "Waiting for frontend..."
 $frontendReady = $false
-for ($i = 0; $i -lt 20; $i++) {
-  try {
-    $r = Invoke-WebRequest -Uri "http://localhost:$FRONTEND_PORT" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue
-    if ($r.StatusCode -eq 200) { $frontendReady = $true; break }
-  } catch { }
+for ($i = 0; $i -lt 25; $i++) {
+  if (Test-Port "127.0.0.1" $FRONTEND_PORT) { $frontendReady = $true; break }
   Start-Sleep -Seconds 1
 }
 
