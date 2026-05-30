@@ -1,4 +1,5 @@
-﻿from fastapi import FastAPI, Request, status
+﻿from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse
 
@@ -15,6 +16,16 @@ from .middleware import (
 )
 from .security import SecurityHeadersMiddleware
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        from scripts.init_db import init_db
+        init_db()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("DB init skipped: %s", e)
+    yield
+
 # Configurer le tracing OpenTelemetry
 setup_tracing(
     service_name=settings.app_name.lower(),
@@ -28,6 +39,7 @@ app = FastAPI(
     description=domain_config.description,
     version="1.0.0",
     debug=settings.debug,
+    lifespan=lifespan,
     docs_url="/docs",
     redoc_url=None,
     openapi_url="/openapi.json",

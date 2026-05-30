@@ -4,21 +4,7 @@ import jwt
 import sqlite3
 
 from .db import get_db
-# Import depuis app.security.py (ancien module - fichier, pas package)
-import importlib.util
-from pathlib import Path
-_parent = Path(__file__).parent
-_security_file = _parent / "security.py"
-if _security_file.exists():
-    spec = importlib.util.spec_from_file_location("app.security_module", _security_file)
-    _security_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(_security_module)
-    decode_token = _security_module.decode_token
-else:
-    # Fallback si le fichier n'existe pas
-    from app.security import decode_token
-
-# Import depuis app.security (nouveau package)
+from .auth import decode_token
 from .security.rate_limiter import chat_rate_limiter, doc_upload_rate_limiter, auth_rate_limiter
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -33,24 +19,10 @@ def get_current_user(
 
     # Try to find user in local database
     user = db.execute("SELECT * FROM users WHERE id = ?", (payload["sub"],)).fetchone()
-    
-    # If user not found locally but token is valid, accept it anyway
-    # This allows tokens from other domains to work (shared SECRET_KEY)
-    # The token itself is the proof of authentication
+
     if not user:
-        # Token is valid (same SECRET_KEY), so create a minimal user object
-        # This allows cross-domain authentication without requiring user in every DB
-        from .config import settings
-        # Check if SECRET_KEY matches (tokens are only valid if signed with same key)
-        # Since decode_token already validated the signature, we can trust the payload
-        user = {
-            "id": payload["sub"],
-            "email": payload.get("email", f"user_{payload['sub']}@cross-domain"),
-            "organization_id": payload.get("organization_id", 1),
-            "role": payload.get("role", "member"),
-            "status": "active"
-        }
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
     return user
 
 def get_current_org(user = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):

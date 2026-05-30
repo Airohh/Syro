@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     otlp_endpoint: str | None = None  # Ex: http://localhost:4317
     
     # Sécurité
-    cors_allow_origins: str = "*"  # En prod: liste d'origines séparées par des virgules
+    cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_allow_credentials: bool = True
     max_file_size_mb: int = 100  # Taille maximale des fichiers uploadés (MB)
     max_text_size_mb: int = 10  # Taille maximale du texte uploadé (MB)

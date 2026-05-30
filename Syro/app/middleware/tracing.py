@@ -40,11 +40,16 @@ def setup_tracing(
     try:
         # Créer l'exporter OTLP
         exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
-        
+
+        # Créer le TracerProvider avec le nom du service
+        provider = TracerProvider(
+            resource=Resource({"service.name": service_name})
+        )
+
         # Ajouter le processor
         processor = BatchSpanProcessor(exporter)
         provider.add_span_processor(processor)
-        
+
         # Définir le provider global
         trace.set_tracer_provider(provider)
         
