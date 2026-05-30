@@ -89,17 +89,17 @@ CORS_ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # 3. Kill existing process on port 8000
 Write-Step "Freeing port $BACKEND_PORT..."
-$netstatOutput = netstat -ano 2>$null | Select-String ":$BACKEND_PORT\s.*LISTENING"
-if ($netstatOutput) {
-  $line = $netstatOutput.ToString().Trim()
-  $parts = $line -split '\s+'
-  $pidVal = $parts[-1]
+$netstatLines = cmd /c "netstat -ano" 2>$null | Where-Object { $_ -match ":$BACKEND_PORT\s" -and $_ -match "LISTENING" }
+if ($netstatLines) {
+  $line = ($netstatLines | Select-Object -First 1).Trim()
+  $parts = ($line -split '\s+') | Where-Object { $_ -ne '' }
+  $pidVal = $parts | Select-Object -Last 1
   try {
-    taskkill /PID $pidVal /F 2>$null | Out-Null
+    cmd /c "taskkill /PID $pidVal /F" 2>$null | Out-Null
     Start-Sleep -Milliseconds 600
     Write-Ok "Killed PID $pidVal on port $BACKEND_PORT"
   } catch {
-    Write-Warn "Could not kill PID $pidVal"
+    Write-Warn "Could not kill PID $pidVal - port may still be in use"
   }
 } else {
   Write-Ok "Port $BACKEND_PORT is free"
@@ -111,7 +111,9 @@ if (-not $SkipDocker) {
   if ($dockerCmd) {
     Write-Step "Starting Qdrant + Redis via Docker..."
     $compose = Join-Path $ROOT "infra\docker-compose.dev-local.yml"
+    $ErrorActionPreference = 'Continue'
     docker compose -f $compose up -d 2>&1 | Out-Null
+    $ErrorActionPreference = 'Stop'
 
     Write-Step "Waiting for Qdrant (port 6333)..."
     $qdrantReady = $false
