@@ -1,6 +1,7 @@
 import { Message, Source } from '../services/api';
 import { User, Copy, Check, ChevronDown, ChevronUp, ExternalLink, FileText } from 'lucide-react';
 import { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { getDomainConfig } from '../utils/domainConfig';
 import { getDomainClasses } from '../utils/domainStyles';
 
@@ -31,7 +32,7 @@ function renderContent(text: string): { __html: string } {
   }
   if (last < text.length) parts.push(processText(text.slice(last), esc));
 
-  return { __html: parts.join('') };
+  return { __html: DOMPurify.sanitize(parts.join(''), { ADD_ATTR: ['class'] }) };
 }
 
 function processText(text: string, esc: (s: string) => string): string {

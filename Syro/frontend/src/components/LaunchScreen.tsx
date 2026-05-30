@@ -33,6 +33,13 @@ export default function LaunchScreen({ onBackendReady }: Props) {
     return () => clearInterval(interval);
   }, []);
 
+  // Auto-start polling in browser mode (no Electron)
+  useEffect(() => {
+    if (!isElectron) {
+      handleStart();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -73,9 +80,7 @@ export default function LaunchScreen({ onBackendReady }: Props) {
       pollHealth();
       return () => unsub();
     } else {
-      addLog('error', 'Mode Electron requis pour démarrer le backend automatiquement.');
-      addLog('info', 'Lance manuellement : uvicorn app.main:app --port 8000');
-      setStatus('error');
+      addLog('info', 'En attente du backend sur http://127.0.0.1:8000...');
       pollHealth();
     }
   };

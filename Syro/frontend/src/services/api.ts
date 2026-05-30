@@ -11,11 +11,16 @@ const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_URL ||
 
 let currentDomainId: string = 'general';
 
+// Cache instances by baseURL to avoid creating new Axios instances on every call
+const instanceCache = new Map<string, AxiosInstance>();
+
 // Create a function to get the API instance with the correct base URL
 function createApiInstance(domainId?: string): AxiosInstance {
   const domain = domainId || currentDomainId;
   // Always use getDomainApiUrl to ensure correct port
   const baseURL = getDomainApiUrl(domain);
+
+  if (instanceCache.has(baseURL)) return instanceCache.get(baseURL)!;
   
   const instance = axios.create({
     baseURL,
@@ -68,12 +73,10 @@ function createApiInstance(domainId?: string): AxiosInstance {
             error.message = `Authentification échouée: ${error.response.data.detail}`;
             error.userMessage = `Les identifiants sont incorrects ou l'utilisateur n'existe pas.`;
             error.solution = `Vérifiez vos identifiants ou initialisez la base de données avec: python scripts/init_db.py`;
-            error.action = `Identifiants par défaut: owner@example.com / ChangeMe123!`;
           } else {
             error.message = `Authentification échouée (401 Unauthorized)`;
             error.userMessage = `Les identifiants sont incorrects ou l'utilisateur n'existe pas dans la base de données.`;
             error.solution = `Initialisez la base de données avec: python scripts/init_db.py`;
-            error.action = `Identifiants par défaut: owner@example.com / ChangeMe123!`;
           }
           
           error.technicalMessage = error.message;
@@ -94,6 +97,7 @@ function createApiInstance(domainId?: string): AxiosInstance {
     }
   );
 
+  instanceCache.set(baseURL, instance);
   return instance;
 }
 
