@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, LogOut, Activity, User } from 'lucide-react';
+import { CheckCircle2, XCircle, LogOut, User, Wifi } from 'lucide-react';
 import { domainService } from '../services/api';
 import { getDomainConfig } from '../utils/domainConfig';
 import { getDomainClasses } from '../utils/domainStyles';
@@ -15,11 +15,11 @@ interface SidebarProps {
   onSelectConversation?: (messages: any[], conversationId?: string) => void;
 }
 
-export default function Sidebar({ 
-  onLogout, 
+export default function Sidebar({
+  onLogout,
   currentDomain = 'general',
   onNewConversation,
-  onSelectConversation 
+  onSelectConversation,
 }: SidebarProps) {
   const navigate = useNavigate();
   const [health, setHealth] = useState<{ status: string; domain?: string; app_name?: string } | null>(null);
@@ -31,27 +31,18 @@ export default function Sidebar({
   useEffect(() => {
     const checkHealth = async () => {
       setLoading(true);
-      // Retry logic: try multiple times with delays
-      const maxRetries = 3;
-      const retryDelay = 2000; // 2 seconds
-      
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          // Utiliser le domaine actuel pour vérifier la santé
           const data = await domainService.getHealth(currentDomain);
           setHealth(data);
           setLoading(false);
-          return; // Success, exit the function
-        } catch (error) {
-          console.log(`Health check attempt ${attempt}/${maxRetries} failed for domain ${currentDomain}`);
-          
-          if (attempt === maxRetries) {
-            // Last attempt failed
+          return;
+        } catch {
+          if (attempt === 3) {
             setHealth(null);
             setLoading(false);
           } else {
-            // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            await new Promise(r => setTimeout(r, 2000));
           }
         }
       }
@@ -63,83 +54,61 @@ export default function Sidebar({
   }, [currentDomain]);
 
   return (
-    <aside className="w-sidebar bg-white border-r border-gray-200 flex flex-col h-screen shrink-0">
-      {/* Header compact */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center 
-            ${domainClasses.bgLight} ${domainClasses.text} shadow-soft`}>
+    <aside className="w-sidebar bg-zinc-950 border-r border-white/5 flex flex-col h-screen shrink-0">
+      {/* Domain header */}
+      <div className="px-4 py-3.5 border-b border-white/5">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
+            ${domainClasses.bgLight} ${domainClasses.text}`}>
             <DomainIcon className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-semibold text-gray-900 truncate leading-tight">
-              {domain.name}
-            </h2>
-            <p className="text-xs text-gray-500 truncate leading-tight">
-              {domain.shortName}
-            </p>
+            <p className="text-xs font-semibold text-zinc-200 truncate leading-tight">{domain.name}</p>
+            <p className="text-xs text-zinc-600 truncate leading-tight">{domain.shortName}</p>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-5">
+
         {/* Status */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Activity className="w-3.5 h-3.5 text-gray-400" />
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Statut
-            </h3>
+        <section>
+          <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2 px-1">
+            Statut
+          </p>
+          <div className="bg-zinc-900/60 rounded-lg px-3 py-2.5 border border-white/5">
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-zinc-600 animate-pulse" />
+                <span className="text-xs text-zinc-600">Vérification...</span>
+              </div>
+            ) : health ? (
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="text-xs text-emerald-400 font-medium">En ligne</span>
+                {health.app_name && (
+                  <span className="text-xs text-zinc-600 ml-auto truncate">{health.app_name}</span>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                <span className="text-xs text-red-400 font-medium">Hors ligne</span>
+              </div>
+            )}
           </div>
-          {loading ? (
-            <div className="flex items-center gap-2 text-gray-400">
-              <div className="animate-spin rounded-full h-3 w-3 border-2 border-gray-300 border-t-gray-600"></div>
-              <span className="text-xs">Vérification...</span>
-            </div>
-          ) : health ? (
-            <div className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle className="w-4 h-4" />
-              <span className="text-xs font-medium">En ligne</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-red-600">
-              <XCircle className="w-4 h-4" />
-              <span className="text-xs font-medium">Hors ligne</span>
-            </div>
-          )}
-        </div>
+        </section>
 
-        {/* Domain info */}
-        {health && (
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              Instance
-            </h3>
-            <div className="space-y-2">
-              {health.app_name && (
-                <div className="text-xs text-gray-700 font-medium bg-gray-50 px-2.5 py-1.5 rounded-md border border-gray-100">
-                  {health.app_name}
-                </div>
-              )}
-              {health.domain && (
-                <div className="text-xs text-gray-500 bg-gray-50 px-2.5 py-1.5 rounded-md border border-gray-100">
-                  Domaine: {health.domain}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Backend Status - État de tous les backends */}
-        <div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            Backends
-          </h3>
+        {/* Backends */}
+        <section>
+          <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2 px-1 flex items-center gap-1.5">
+            <Wifi className="w-3 h-3" /> Backends
+          </p>
           <BackendStatus />
-        </div>
+        </section>
 
-        {/* Historique des conversations */}
+        {/* Conversation history */}
         {onNewConversation && onSelectConversation && (
           <ConversationHistory
             onSelectConversation={onSelectConversation}
@@ -147,29 +116,27 @@ export default function Sidebar({
           />
         )}
 
-        {/* Upload de documents */}
+        {/* Document upload */}
         <DocumentUpload currentDomain={currentDomain} />
-
-        {/* Lien vers profil */}
-        <div>
-          <button
-            onClick={() => navigate('/profile')}
-            className="w-full btn-secondary flex items-center justify-center gap-2 text-sm"
-          >
-            <User className="w-4 h-4" />
-            Profil
-          </button>
-        </div>
       </div>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-200">
+      {/* Footer actions */}
+      <div className="p-3 border-t border-white/5 space-y-1.5">
+        <button
+          onClick={() => navigate('/profile')}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-zinc-400
+            hover:text-zinc-100 hover:bg-zinc-800 transition-all duration-150 cursor-pointer text-sm"
+        >
+          <User className="w-4 h-4 shrink-0" />
+          <span>Profil</span>
+        </button>
         <button
           onClick={onLogout}
-          className="w-full btn-secondary flex items-center justify-center gap-2 text-sm"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-zinc-500
+            hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 cursor-pointer text-sm"
         >
-          <LogOut className="w-4 h-4" />
-          Déconnexion
+          <LogOut className="w-4 h-4 shrink-0" />
+          <span>Déconnexion</span>
         </button>
       </div>
     </aside>

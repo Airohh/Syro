@@ -91,10 +91,11 @@ export default {
         '3xl': '1.5rem',
       },
       boxShadow: {
-        'soft': '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.1)',
-        'medium': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        'large': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-        'glow': '0 0 20px rgba(37, 99, 235, 0.15)',
+        'soft': '0 1px 3px 0 rgba(0,0,0,0.4), 0 1px 2px 0 rgba(0,0,0,0.3)',
+        'medium': '0 4px 12px rgba(0,0,0,0.5)',
+        'large': '0 10px 40px rgba(0,0,0,0.6)',
+        'glow': '0 0 20px rgba(59,130,246,0.25)',
+        'glow-sm': '0 0 10px rgba(59,130,246,0.15)',
       },
       animation: {
         'fade-in': 'fadeIn 0.2s ease-in',
@@ -118,6 +119,10 @@ export default {
       },
       backdropBlur: {
         xs: '2px',
+      },
+      opacity: {
+        6: '0.06',
+        8: '0.08',
       },
     },
   },

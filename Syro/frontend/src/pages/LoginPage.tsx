@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { Sparkles, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (username: string, password: string) => Promise<boolean>;
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
-  const [username, setUsername] = useState('owner@example.com');
-  const [password, setPassword] = useState('ChangeMe123!');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,85 +19,106 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     try {
       const success = await onLogin(username, password);
       if (!success) {
-        setError('Erreur de connexion. Vérifiez vos identifiants. Identifiants par défaut: owner@example.com / ChangeMe123!');
+        setError('Identifiants incorrects. Vérifiez votre email et mot de passe.');
       }
-    } catch (error: any) {
-      // Afficher le message d'erreur avec les identifiants par défaut si c'est une erreur 401
-      let errorMessage = error?.message || 'Erreur de connexion. Vérifiez que le backend est bien lancé sur http://localhost:8000';
-      
-      // Si c'est une erreur 401, ajouter les identifiants par défaut
-      if (error?.response?.status === 401 || errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-        if (!errorMessage.includes('owner@example.com')) {
-          errorMessage += ' Identifiants par défaut: owner@example.com / ChangeMe123!';
-        }
+    } catch (err: any) {
+      let msg = err?.message || 'Erreur de connexion. Vérifiez que le backend est lancé.';
+      if (err?.response?.status === 401 || msg.includes('401') || msg.includes('Unauthorized')) {
+        msg = 'Identifiants incorrects. Vérifiez votre email et mot de passe.';
       }
-      
-      setError(errorMessage);
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="card w-full max-w-md">
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      {/* Background glow */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-64 h-64 bg-violet-600/8 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative w-full max-w-sm">
+        {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-gray-900 to-gray-700 rounded-2xl mb-4 shadow-medium">
-            <MessageSquare className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 mb-5 shadow-lg shadow-blue-500/20">
+            <Sparkles className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-3xl font-semibold text-gray-900 mb-2 tracking-tight">Syro</h1>
-          <p className="text-gray-600 text-sm">Assistant IA Multi-Domaines</p>
+          <h1 className="text-2xl font-semibold text-zinc-100 mb-1 tracking-tight">Syro</h1>
+          <p className="text-sm text-zinc-500">Assistant IA Multi-Domaines</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              {error}
+        {/* Card */}
+        <div className="bg-zinc-900 border border-white/6 rounded-2xl p-6 shadow-2xl">
+          <h2 className="text-sm font-medium text-zinc-300 mb-5">Connexion à votre compte</h2>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label htmlFor="username" className="block text-xs font-medium text-zinc-400">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                <input
+                  id="username"
+                  type="email"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="input-field pl-9"
+                  placeholder="vous@exemple.com"
+                  autoComplete="email"
+                  required
+                />
+              </div>
             </div>
-          )}
 
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              id="username"
-              type="email"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="input-field"
-              required
-            />
-          </div>
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="block text-xs font-medium text-zinc-400">
+                Mot de passe
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input-field pl-9"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+            </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Mot de passe
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input-field"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Connexion...' : 'Se connecter'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-500">
-          <p>Assurez-vous que l'API Syro est lancée</p>
+            <button
+              type="submit"
+              disabled={loading || !username || !password}
+              className="btn-primary w-full mt-2 py-3"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ArrowRight className="w-4 h-4" />
+              )}
+              {loading ? 'Connexion...' : 'Se connecter'}
+            </button>
+          </form>
         </div>
+
+        <p className="text-center text-xs text-zinc-600 mt-5">
+          Assurez-vous que l'API Syro est lancée sur{' '}
+          <code className="text-zinc-500 font-mono">localhost:8000</code>
+        </p>
       </div>
     </div>
   );
 }
-
