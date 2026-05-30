@@ -17,9 +17,6 @@ export function getDomainPort(_domainId: string): number {
 }
 
 export function getDomainApiUrl(_domainId: string): string {
-  // Tous les domaines utilisent le même backend sur le port 8000
-  // Les routes multi-domaines sont gérées par le backend
-  // Le paramètre _domainId est conservé pour la compatibilité avec le code existant
-  return `http://localhost:8000`;
+  return `http://127.0.0.1:8000`;
 }
 

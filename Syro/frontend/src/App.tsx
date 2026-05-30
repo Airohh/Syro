@@ -3,23 +3,21 @@ import { useState, useEffect } from 'react';
 import LoginPage from './pages/LoginPage';
 import ChatPage from './pages/ChatPage';
 import ProfilePage from './pages/ProfilePage';
+import LaunchScreen from './components/LaunchScreen';
 import { authService, domainService } from './services/api';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [showLaunch, setShowLaunch] = useState(false);
 
   useEffect(() => {
     const checkBackend = async () => {
-      // Retry logic: try multiple times with delays
-      // Augmenté pour laisser plus de temps au backend de s'initialiser
-      const maxRetries = 15; // Augmenté à 15 tentatives
-      const retryDelay = 2000; // 2 secondes entre chaque tentative
+      const maxRetries = 3;
+      const retryDelay = 1500;
       
-      // Attendre un peu avant de commencer (le backend peut être en cours d'initialisation)
-      // Augmenté à 5 secondes pour laisser plus de temps au backend de démarrer
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -63,6 +61,7 @@ function App() {
             }
             
             setBackendError(errorMsg);
+            setShowLaunch(true);
             console.error('[Backend Check] Échec après toutes les tentatives:', errorDetails);
           } else {
             // Wait before retrying
@@ -77,8 +76,7 @@ function App() {
     setIsAuthenticated(!!token);
     
     // Check backend health with retries
-    checkBackend();
-    setLoading(false);
+    checkBackend().finally(() => setLoading(false));
   }, []);
 
   const handleLogin = async (username: string, password: string): Promise<boolean> => {
@@ -92,7 +90,7 @@ function App() {
         
         // Si c'est une erreur 401, c'est un problème d'authentification
         if (error?.response?.status === 401) {
-          throw new Error('Identifiants incorrects. Utilisez: owner@example.com / ChangeMe123!');
+          throw new Error('Identifiants incorrects. Vérifiez votre email et mot de passe.');
         }
         
         // Sinon, c'est un problème de connexion
@@ -100,8 +98,7 @@ function App() {
           throw new Error('Impossible de se connecter au backend Tech. Vérifiez que l\'API est bien lancée sur http://localhost:8000');
         }
         
-        // Message d'erreur générique avec les identifiants par défaut
-        throw new Error(error?.message || 'Erreur de connexion. Identifiants par défaut: owner@example.com / ChangeMe123!');
+        throw new Error(error?.message || 'Erreur de connexion. Vérifiez que l\'API est bien lancée sur http://localhost:8000');
       }
       
       // NOTE: Avec l'architecture multi-domaines, un seul login suffit
@@ -135,12 +132,11 @@ function App() {
 
   return (
     <BrowserRouter>
-      {backendError && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-3 text-center">
-          <p className="text-red-700 text-sm">
-            ⚠️ {backendError}
-          </p>
-        </div>
+      {showLaunch && (
+        <LaunchScreen onBackendReady={() => {
+          setShowLaunch(false);
+          setBackendError(null);
+        }} />
       )}
       <Routes>
         <Route

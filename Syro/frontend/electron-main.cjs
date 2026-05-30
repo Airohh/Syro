@@ -1,7 +1,56 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+
+let backendProcess = null;
+
+ipcMain.on('start-backend', (event) => {
+  if (backendProcess) {
+    event.sender.send('backend-status', { type: 'info', message: 'Backend déjà en cours d\'exécution.' });
+    return;
+  }
+
+  const backendDir = path.join(__dirname, '..');
+  event.sender.send('backend-status', { type: 'info', message: `Répertoire: ${backendDir}` });
+  event.sender.send('backend-status', { type: 'info', message: 'Démarrage de uvicorn...' });
+
+  backendProcess = spawn(
+    'python',
+    ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'],
+    { cwd: backendDir, shell: true, windowsHide: true }
+  );
+
+  backendProcess.stdout.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg) event.sender.send('backend-status', { type: 'log', message: msg });
+  });
+
+  backendProcess.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (!msg) return;
+    const isError = msg.toLowerCase().includes('error') && !msg.includes('INFO');
+    event.sender.send('backend-status', { type: isError ? 'error' : 'log', message: msg });
+  });
+
+  backendProcess.on('close', (code) => {
+    event.sender.send('backend-status', { type: 'error', message: `Processus terminé (code ${code})` });
+    backendProcess = null;
+  });
+
+  backendProcess.on('error', (err) => {
+    event.sender.send('backend-status', { type: 'error', message: `Erreur spawn: ${err.message}` });
+    backendProcess = null;
+  });
+});
+
+ipcMain.on('stop-backend', () => {
+  if (backendProcess) {
+    backendProcess.kill();
+    backendProcess = null;
+  }
+});
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 // Désactiver les warnings de sécurité (optionnel, pour un environnement de développement)
@@ -81,10 +130,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      // Désactiver webSecurity en développement pour permettre les connexions localhost
-      webSecurity: !isDev,  // false en dev, true en production
-      // Permettre les connexions locales pour le développement
-      allowRunningInsecureContent: isDev,  // true en dev seulement
+      preload: path.join(__dirname, 'preload.cjs'),
+      webSecurity: !isDev,
+      allowRunningInsecureContent: isDev,
       experimentalFeatures: false,
     },
     icon: path.join(__dirname, 'public', 'vite.svg'),
@@ -282,8 +330,11 @@ app.whenReady().then(() => {
   });
 });
 
-// Quitter quand toutes les fenêtres sont fermées, sauf sur macOS
 app.on('window-all-closed', () => {
+  if (backendProcess) {
+    backendProcess.kill();
+    backendProcess = null;
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
