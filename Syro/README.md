@@ -65,6 +65,7 @@ Vector Search ┘         │                                        │
 - **RAGAS evaluation** — reproducible benchmark on 20 Q/A pairs across Tech and MLOps domains
 - **MLOps** — MLflow experiment tracking, alerting thresholds, benchmark endpoint
 - **Security** — rate limiting (Redis or in-memory), CORS, security headers, file validation (MIME + size), HTTPS-ready
+- **Resilience** — LLM timeouts + retries, circuit breaker (fail-fast when the backend is down), graceful degradation to BM25-only search if embeddings are unavailable
 
 ---
 
@@ -268,6 +269,11 @@ All settings are read from environment variables or `.env` file. Key variables:
 | `EMBEDDING_DIMENSIONS` | `768` | Must match the embedding model |
 | `OPENAI_API_KEY` | — | Required if `LLM_PROVIDER=openai` |
 | `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama endpoint |
+| `LLM_TIMEOUT` | `60` | Chat LLM call timeout (seconds) |
+| `EMBEDDING_TIMEOUT` | `30` | Embedding call timeout (seconds) |
+| `LLM_MAX_RETRIES` | `2` | Automatic retries on transient LLM errors |
+| `CIRCUIT_BREAKER_THRESHOLD` | `5` | Consecutive failures before the breaker opens |
+| `CIRCUIT_BREAKER_RESET_SECONDS` | `30` | Cool-down before a half-open trial call |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint |
 | `DB_PATH` | `db/syro.db` | SQLite database path |
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Redis for Celery |

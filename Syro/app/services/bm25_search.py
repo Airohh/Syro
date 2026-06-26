@@ -13,6 +13,27 @@ class BM25Search:
     def __init__(self) -> None:
         self._indexes: dict[int, tuple[BM25Okapi, list[dict[str, Any]]]] = {}
         self._needs_rebuild: set[int] = set()
+        self._fingerprints: dict[int, tuple[int, int]] = {}
+
+    def _content_fingerprint(self, organization_id: int) -> tuple[int, int]:
+        """Empreinte (count, max id) des chunks actifs de l'org.
+
+        L'index BM25 vit en mémoire par processus : l'ingestion faite par le
+        worker Celery n'invalide pas l'index du processus API. Cette empreinte,
+        recalculée à chaque recherche (1 requête SQL indexée), détecte les
+        changements faits par un autre processus.
+        """
+        with db_session() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS chunk_count, COALESCE(MAX(dc.id), 0) AS max_chunk_id
+                FROM doc_chunks dc
+                JOIN documents d ON d.id = dc.document_id
+                WHERE d.organization_id = ? AND d.status = 'active'
+                """,
+                (organization_id,),
+            ).fetchone()
+        return (row["chunk_count"], row["max_chunk_id"])
 
     def _tokenize(self, text: str) -> list[str]:
         tokens = re.findall(r"\b\w+\b", text.lower())
@@ -66,8 +87,14 @@ class BM25Search:
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        if organization_id not in self._indexes or organization_id in self._needs_rebuild:
+        fingerprint = self._content_fingerprint(organization_id)
+        if (
+            organization_id not in self._indexes
+            or organization_id in self._needs_rebuild
+            or self._fingerprints.get(organization_id) != fingerprint
+        ):
             self._rebuild_index(organization_id)
+            self._fingerprints[organization_id] = fingerprint
         
         bm25, chunk_data = self._indexes[organization_id]
         
@@ -108,6 +135,7 @@ class BM25Search:
 
     def mark_for_rebuild(self, organization_id: int) -> None:
         self._needs_rebuild.add(organization_id)
+        self._fingerprints.pop(organization_id, None)
         if organization_id in self._indexes:
             del self._indexes[organization_id]
 

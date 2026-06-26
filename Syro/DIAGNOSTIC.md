@@ -1,5 +1,19 @@
 # Diagnostic — Erreur 500 sur /chat/message
 
+> **RÉSOLU (2026-06-10)** — Cause racine identifiée : `get_embedding_vector(query)` dans
+> `hybrid_search()` n'était pas protégé. Si l'appel embeddings échoue (Ollama down,
+> endpoint `/v1/embeddings` indisponible, timeout), l'exception remontait jusqu'au router → 500.
+> Les pistes 1 (Qdrant) et 2 (domain_detector) étaient fausses : `VectorStore` wrappe tout en
+> `VectorStoreError` (catchée → `[]`), et `detect_domain` est keyword-based, sans modèle ML.
+>
+> Fixes appliqués :
+> - `hybrid_search.py` : embedding en échec → dégradation BM25-only (plus de 500)
+> - `rag.py` : même garde sur le chemin vector-only → `[]`
+> - `llm.py` : `timeout` + `max_retries` sur ChatOpenAI/OpenAIEmbeddings (Ollama + OpenAI)
+> - `config.py` / `.env.example` : `LLM_TIMEOUT`, `EMBEDDING_TIMEOUT`, `LLM_MAX_RETRIES`
+> - `routers/chat.py` : le détail d'exception n'est plus renvoyé au client
+> - Test : `test_hybrid_search_embedding_failure_falls_back_to_bm25`
+
 ## Symptôme
 Login OK. Premier message → 500 "Une erreur s'est produite sur le serveur."
 

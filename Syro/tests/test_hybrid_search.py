@@ -128,5 +128,44 @@ class TestHybridSearch:
             top_k=5,
             domain="tech"
         )
-        
+
         assert results == []
+
+    @patch('app.services.hybrid_search.bm25_search')
+    @patch('app.services.hybrid_search.VectorStore')
+    @patch('app.services.hybrid_search.get_embedding_vector')
+    @patch('app.services.hybrid_search.settings')
+    def test_hybrid_search_embedding_failure_falls_back_to_bm25(
+        self,
+        mock_settings,
+        mock_get_embedding,
+        mock_vector_store_class,
+        mock_bm25_search
+    ):
+        """Test dégradation BM25-only quand l'embedding échoue (LLM provider down)."""
+        mock_settings.rerank_top_k = 5
+        mock_settings.retrieval_top_k = 5
+        mock_settings.hybrid_search_alpha = 0.5
+        mock_settings.enable_reranking = False
+
+        mock_get_embedding.side_effect = RuntimeError("LLM provider not configured")
+
+        mock_vector_store = Mock()
+        mock_vector_store_class.return_value = mock_vector_store
+
+        mock_bm25_search.search.return_value = [
+            {"text": "bm25 result 1", "score": 0.7, "metadata": {}, "chunk_id": "1_1_3"},
+        ]
+
+        results = hybrid_search(
+            organization_id=1,
+            query="test query",
+            top_k=5,
+            domain="tech"
+        )
+
+        # Pas de 500 : la recherche lexicale prend le relais
+        assert len(results) == 1
+        assert results[0]["text"] == "bm25 result 1"
+        mock_vector_store.search.assert_not_called()
+        mock_bm25_search.search.assert_called_once()

@@ -19,9 +19,15 @@ def app():
 
 
 @pytest.fixture(autouse=True)
-def clear_dependency_overrides(app):
+def clear_dependency_overrides():
+    # Ne dépend PAS de la fixture `app` : une dépendance directe forcerait
+    # l'import de app.main (torch, langchain, mlflow…) pour CHAQUE test,
+    # y compris les tests unitaires purs. On ne nettoie que si l'app a
+    # réellement été importée par le test.
     yield
-    app.dependency_overrides.clear()
+    app_module = sys.modules.get("app.main")
+    if app_module is not None:
+        app_module.app.dependency_overrides.clear()
 
 
 @pytest.fixture

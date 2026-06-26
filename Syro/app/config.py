@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 768
     chat_model: str = "llama3.2"
     chat_temperature: float = 0.2
+    llm_timeout: float = 60.0  # Timeout (s) des appels chat LLM
+    embedding_timeout: float = 30.0  # Timeout (s) des appels embeddings
+    llm_max_retries: int = 2  # Retries automatiques sur erreurs transitoires
+    circuit_breaker_threshold: int = 5  # Échecs consécutifs avant ouverture
+    circuit_breaker_reset_seconds: float = 30.0  # Repos avant essai half-open
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     data_dir: Path = PROJECT_ROOT / "storage"

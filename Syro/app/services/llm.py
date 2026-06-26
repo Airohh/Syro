@@ -29,6 +29,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 from ..config import settings
 from ..domains import get_domain_config
+from .circuit_breaker import CircuitBreaker
 
 _embedding_cache: OrderedDict[str, np.ndarray] = OrderedDict()
 _cache_max_size = settings.embedding_cache_size if settings.embedding_cache_enabled else 0
@@ -39,6 +40,15 @@ class LLMProvider:
         self._embedder = None
         self._chat_model = None
         self._has_llm = False
+        # Breakers séparés : un backend peut servir les embeddings mais pas le chat
+        self._chat_breaker = CircuitBreaker(
+            failure_threshold=settings.circuit_breaker_threshold,
+            reset_timeout=settings.circuit_breaker_reset_seconds,
+        )
+        self._embed_breaker = CircuitBreaker(
+            failure_threshold=settings.circuit_breaker_threshold,
+            reset_timeout=settings.circuit_breaker_reset_seconds,
+        )
         
         # Use Ollama by default (free and local)
         if self._provider == "ollama" or (self._provider != "openai" and not settings.openai_api_key):
@@ -112,12 +122,16 @@ class LLMProvider:
                 model=settings.embeddings_model,
                 api_key="ollama",  # Ollama doesn't need a real key, but langchain requires something
                 base_url=base_url,
+                timeout=settings.embedding_timeout,
+                max_retries=settings.llm_max_retries,
             )
             self._chat_model = ChatOpenAI(
                 model=settings.chat_model,
                 api_key="ollama",
                 base_url=base_url,
                 temperature=settings.chat_temperature,
+                timeout=settings.llm_timeout,
+                max_retries=settings.llm_max_retries,
             )
             self._has_llm = True
             logger.info("Ollama configured: %s at %s%s", settings.chat_model, base_url, gpu_info)
@@ -137,12 +151,16 @@ class LLMProvider:
                 model=settings.embeddings_model,
                 api_key=settings.openai_api_key,
                 base_url=settings.openai_base_url,
+                timeout=settings.embedding_timeout,
+                max_retries=settings.llm_max_retries,
             )
             self._chat_model = ChatOpenAI(
                 model=settings.chat_model,
                 api_key=settings.openai_api_key,
                 base_url=settings.openai_base_url,
                 temperature=settings.chat_temperature,
+                timeout=settings.llm_timeout,
+                max_retries=settings.llm_max_retries,
             )
             self._has_llm = True
             logger.info("OpenAI configured: %s", settings.chat_model)
@@ -158,19 +176,33 @@ class LLMProvider:
     def embed(self, text: str) -> np.ndarray:
         cache_key = None
         if settings.embedding_cache_enabled:
-            cache_key = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            # Clé inclut le modèle : changer EMBEDDINGS_MODEL ne doit pas
+            # servir des vecteurs de l'ancien modèle.
+            cache_key = hashlib.sha256(
+                f"{settings.embeddings_model}::{text}".encode("utf-8")
+            ).hexdigest()
             if cache_key in _embedding_cache:
                 _embedding_cache.move_to_end(cache_key)
                 return _embedding_cache[cache_key]
-        
-        if self._embedder:
-            vector = self._embedder.embed_query(text)
-            result = np.array(vector, dtype=np.float32)
-        else:
+
+        if not self._embedder:
             raise RuntimeError(
                 "LLM provider not configured — cannot generate embeddings. "
                 "Check that Ollama is running or OPENAI_API_KEY is set."
             )
+
+        if not self._embed_breaker.allow():
+            # Circuit ouvert : échec immédiat au lieu de payer le timeout.
+            # La recherche hybride dégrade alors en BM25-only.
+            raise RuntimeError("Embedding backend circuit open — failing fast")
+
+        try:
+            vector = self._embedder.embed_query(text)
+            result = np.array(vector, dtype=np.float32)
+        except Exception:
+            self._embed_breaker.record_failure()
+            raise
+        self._embed_breaker.record_success()
         
         if settings.embedding_cache_enabled and _cache_max_size > 0 and cache_key:
             if len(_embedding_cache) >= _cache_max_size:
@@ -189,7 +221,7 @@ class LLMProvider:
         domain_config = get_domain_config(domain_to_use)
         system_prompt = domain_config.system_prompt
         
-        if self._chat_model and HumanMessage and SystemMessage:
+        if self._chat_model and HumanMessage and SystemMessage and self._chat_breaker.allow():
             try:
                 messages = [
                     SystemMessage(content=system_prompt),
@@ -204,8 +236,10 @@ class LLMProvider:
                     usage = int(response.usage_metadata.get("total_tokens", 0))
                 if usage == 0:
                     usage = len(question.split()) + sum(len(chunk.split()) for chunk in context_chunks)
+                self._chat_breaker.record_success()
                 return text, usage
             except Exception as e:
+                self._chat_breaker.record_failure()
                 logger.warning("LLM invoke failed: %s", e, exc_info=True)
 
         provider_status = "Ollama unavailable" if self._provider == "ollama" else "LLM not configured"
@@ -222,7 +256,7 @@ class LLMProvider:
         domain_config = get_domain_config(domain_to_use)
         system_prompt = domain_config.system_prompt
         
-        if self._chat_model and HumanMessage and SystemMessage:
+        if self._chat_model and HumanMessage and SystemMessage and self._chat_breaker.allow():
             try:
                 messages = [
                     SystemMessage(content=system_prompt),
@@ -234,7 +268,9 @@ class LLMProvider:
                 for chunk in self._chat_model.stream(messages):
                     if hasattr(chunk, "content") and chunk.content:
                         yield chunk.content
+                self._chat_breaker.record_success()
             except Exception as e:
+                self._chat_breaker.record_failure()
                 provider_name = "Ollama" if self._provider == "ollama" else "OpenAI"
                 logger.warning("%s stream failed: %s", provider_name, e)
                 yield f"Error: {provider_name} unavailable."

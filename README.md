@@ -1,165 +1,79 @@
-# Syro - RAG Multi-Domaines
+# Syro — Multi-Domain RAG Platform
 
 <div align="center">
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115.0-green.svg)
-![React](https://img.shields.io/badge/React-18.2.0-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green.svg)
+![React](https://img.shields.io/badge/React-18-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-**Système de recherche documentaire avancé avec RAG (Retrieval-Augmented Generation) hybride**
+**Retrieval-Augmented Generation platform with hybrid search, cross-encoder reranking, multi-domain routing, async ingestion, and MLOps observability.**
 
-[Features](#features) • [Installation](#installation) • [Documentation](#documentation) • [Architecture](#architecture)
+[Quick Start](Syro/README.md#quick-start) • [Full Documentation](Syro/README.md) • [Architecture](docs/architecture.md) • [Evaluation](#evaluation)
 
 </div>
 
 ---
 
-**Syro** est un système de recherche documentaire avancé qui permet de créer plusieurs instances spécialisées par domaine (Tech, Médical, Juridique, Finance, Éducation). Chaque instance utilise une architecture RAG hybride combinant recherche vectorielle (Qdrant) et recherche lexicale (BM25) pour fournir des réponses précises basées sur vos documents.
-## Features
+## What is Syro?
 
-### Recherche Hybride
-- **Recherche vectorielle** (Qdrant) : Similarité sémantique
-- **Recherche lexicale** (BM25) : Mots-clés exacts
-- **Fusion optimisée** : Combinaison des deux méthodes
-- **Reranking** : Amélioration de la précision avec FlagEmbedding
-### Traitement de Documents
-- **Chunking hiérarchique** : Respecte la structure markdown/HTML
-- **Métadonnées enrichies** : Détection automatique (type, difficulté, tags)
-- **Citations sources** : Chaque réponse inclut ses sources
-### Multi-Instances
-- **Architecture modulaire** : Code commun + instances spécialisées
-- **6 domaines** : Tech, Médical, Juridique, Finance, Éducation, MLOps
-- **Agents personnalisés** : Créez des profils de recherche avec leur propre personnalité
-### Performance
-- **Recherche rapide** : 10-70ms pour hybrid search
-- **Scalable** : Qdrant pour millions de documents
-- **API REST** : FastAPI avec documentation Swagger automatique
-### Interface Utilisateur
-- **React + TypeScript** : Application web moderne
-- **Chat en temps réel** : Conversation fluide avec visualisation des sources
-- **Design responsive** : Interface adaptée mobile et desktop
-- **Electron** : Application desktop
-## Installation
-### Prérequis
+Syro is a multi-tenant RAG API: organizations upload documents and query them with an LLM grounded strictly in their own knowledge base. Retrieval combines vector search (Qdrant) and lexical search (BM25), refined by a BGE cross-encoder reranker. Seven specialized domains (Tech, Medical, Legal, Finance, Education, MLOps, General) each get isolated vector collections and tuned prompts.
 
-- Python 3.11+
-- Docker & Docker Compose
-- Node.js 18+ (pour le frontend)
-### Installation Rapide
+```
+Query ──► Domain Router ──► Hybrid Search ──► BGE Reranker ──► LLM ──► Answer + cited sources
+                            (Qdrant + BM25)   (cross-encoder)   (Ollama / OpenAI)
+```
+
+Detailed architecture: [docs/architecture.md](docs/architecture.md) and [Syro/README.md](Syro/README.md#architecture).
+
+## Repository layout
+
+| Path | Purpose |
+|------|---------|
+| [`Syro/`](Syro/) | The base application (FastAPI API, Celery worker, React frontend, Docker infra, tests) — **start here** |
+| [`create_syro_instance.py`](create_syro_instance.py) | Create a specialized instance for one domain (e.g. `python create_syro_instance.py tech`) |
+| [`update_instances.py`](update_instances.py) | Propagate base-code changes to all existing instances |
+| [`docs/`](docs/) | Architecture and getting-started guides |
+
+## Quick Start
+
+Full instructions (Docker Compose, env configuration, API usage) live in **[Syro/README.md](Syro/README.md#quick-start)**. Short version:
 
 ```bash
-# 1. Cloner le repository
-git clone https://github.com/votre-username/syro.git
-cd syro
-
-# 2. Créer une instance (ex: Tech)
-python create_syro_instance.py tech
-
-# 3. Aller dans l'instance
-cd SyroTech
-
-# 4. Créer l'environnement virtuel
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
-
-# 5. Installer les dépendances
-pip install -r requirements.txt
-
-# 6. Démarrer Qdrant (optionnel, pour la recherche vectorielle)
-docker-compose up -d qdrant
-
-# 7. Configurer .env
-copy env.example .env  # Windows
-# cp env.example .env  # Linux/Mac
-# Le fichier .env est pré-configuré, vous pouvez le modifier si nécessaire
-
-# 8. Initialiser la base de données
-python scripts/init_db.py
-
-# 9. Lancer l'API
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+git clone https://github.com/Airohh/Syro.git
+cd Syro/Syro
+cp .env.example .env   # set SECRET_KEY + LLM provider
+docker-compose up -d   # API + Worker + Qdrant + Redis + MLflow
+docker-compose exec api python scripts/init_db.py
 ```
 
-L'API sera disponible sur `http://localhost:8000`
+API: `http://localhost:8000` — Swagger docs at `/docs`.
 
-**Documentation API** : `http://localhost:8000/docs`
-### Frontend (Optionnel)
+## Evaluation
+
+Syro ships a reproducible RAGAS evaluation suite (20 Q/A pairs, Tech + MLOps domains) measuring faithfulness, answer relevancy, context recall, and context precision:
 
 ```bash
-# Dans un autre terminal
-cd SyroTech/frontend
-npm install
-npm run dev
+pip install -r Syro/evaluation/requirements-eval.txt
+python Syro/evaluation/evaluate.py
 ```
 
-Interface disponible sur `http://localhost:5173`
-
-**Note** : Le backend fonctionne sans frontend. Vous pouvez utiliser l'API directement via Swagger UI.
-### Connexion
-
-- **Email**: `owner@example.com`
-- **Password**: `ChangeMe123!`
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    FastAPI API                          │
-│  (Authentification, Upload, Chat, Agents, Admin)        │
-└─────────────────────────────────────────────────────────┘
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-┌───────▼──────┐  ┌───────▼──────┐  ┌───────▼──────┐
-│   Qdrant     │  │    SQLite    │  │     Redis    │
-│ (Vector DB)  │  │ (Metadata)   │  │   (Queue)    │
-└──────────────┘  └──────────────┘  └──────────────┘
-```
-## Documentation
-
-- **[docs/architecture.md](docs/architecture.md)** : Architecture détaillée
-- **[docs/getting-started.md](docs/getting-started.md)** : Guide de démarrage complet
 ## Tests
 
 ```bash
-# Lancer tous les tests
-pytest
-
-# Avec coverage
-pytest --cov=app tests/
+cd Syro
+pytest tests/ -m unit -v        # no external services needed
+pytest tests/ -m integration -v
 ```
-## Stack Technique
-### Backend
-- **FastAPI** : Framework web moderne
-- **SQLite** : Base de données pour métadonnées
-- **Qdrant** : Base de données vectorielle
-- **BM25** : Recherche lexicale
-### Frontend
-- **React + TypeScript** : Application web moderne
-- **Tailwind CSS** : Design system
-- **Vite** : Build tool moderne
-- **Electron** : Application desktop
-### ML/Search
-- **Ollama** : LLM local (optionnel)
-- **OpenAI** : LLM cloud (optionnel)
-- **FlagEmbedding** : Reranking (optionnel)
-## Performance
 
-| Métrique | Valeur |
-|----------|--------|
-| Recherche vectorielle | 10-50ms |
-| Recherche BM25 | 5-20ms |
-| Hybrid search | 15-70ms |
-| Chat complet | 1-2s |
-## Contribution
+## Known limitations
 
-Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour le guide complet.
-## License
+- **SQLite** for metadata: fine for a single-node deployment, not for horizontal scaling (Postgres compose profile exists in `infra/` but is not the default).
+- **BM25 index is in-memory** and rebuilt per process: large corpora (>100k chunks) will increase startup time and RAM usage.
+- **Multi-tenancy is logical** (organization-scoped queries), not physical isolation — no per-tenant quotas or billing.
+- **Language**: chunking and BM25 tokenization are tuned for English/French prose; no CJK support.
+- **LLM calls** are guarded by timeouts, automatic retries, and a circuit breaker (fail-fast when the backend is down); retrieval degrades to BM25-only if embeddings are unavailable. Answer quality in degraded mode is naturally lower.
 
-Voir [LICENSE](LICENSE) pour plus d'informations.
+## Contributing & License
 
----
-
-Fait pour la recherche documentaire intelligente
+See [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [MIT](LICENSE).

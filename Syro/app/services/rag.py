@@ -120,7 +120,11 @@ def retrieve_chunks(
         )
         return [r["text"] for r in results]
     else:
-        query_vector = get_embedding_vector(query)
+        try:
+            query_vector = get_embedding_vector(query)
+        except Exception as e:
+            logger.warning("Embedding failed, vector-only retrieval unavailable: %s", e)
+            return []
         vector_store = VectorStore()
         try:
             results = vector_store.search(
@@ -154,7 +158,11 @@ def retrieve_chunks_with_metadata(
             domain=domain,
         )
     else:
-        query_vector = get_embedding_vector(query)
+        try:
+            query_vector = get_embedding_vector(query)
+        except Exception as e:
+            logger.warning("Embedding failed, vector-only retrieval unavailable: %s", e)
+            return []
         vector_store = VectorStore()
         try:
             return vector_store.search(

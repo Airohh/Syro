@@ -151,25 +151,30 @@ class VectorStore:
             client = self._get_client()
             target_collection = self._get_collection_for_domain(domain) if domain else self.collection_name
             
-            scroll_result = client.scroll(
-                collection_name=target_collection,
-                scroll_filter=Filter(
-                    must=[
-                        FieldCondition(
-                            key="document_id",
-                            match=MatchValue(value=document_id),
-                        )
-                    ]
-                ),
-                limit=100,
+            doc_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="document_id",
+                        match=MatchValue(value=document_id),
+                    )
+                ]
             )
-            
-            if scroll_result[0]:  # Points found
-                point_ids = [point.id for point in scroll_result[0]]
-                client.delete(
+
+            # Paginate: un document peut avoir plus de chunks que la limite
+            # d'un seul scroll (sinon les points au-delà restent orphelins).
+            while True:
+                points, next_page_offset = client.scroll(
                     collection_name=target_collection,
-                    points_selector=point_ids,
+                    scroll_filter=doc_filter,
+                    limit=100,
                 )
+                if points:
+                    client.delete(
+                        collection_name=target_collection,
+                        points_selector=[point.id for point in points],
+                    )
+                if not points or next_page_offset is None:
+                    break
         except VectorStoreError:
             raise
         except Exception as e:

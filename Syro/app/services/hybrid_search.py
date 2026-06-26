@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import atexit
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from ..config import settings
 from .llm import get_embedding_vector
@@ -23,7 +26,10 @@ def normalize_scores(scores: list[float]) -> list[float]:
     min_score = min(scores)
     max_score = max(scores)
     if max_score == min_score:
-        return [1.0] * len(scores)
+        # Valeur neutre, pas 1.0 : un résultat unique (ou des ex æquo) ne doit
+        # pas se voir attribuer le score maximal — sinon un domaine pauvre en
+        # résultats écrase les domaines riches lors de la fusion multi-domaine.
+        return [0.5] * len(scores)
     return [(s - min_score) / (max_score - min_score) for s in scores]
 
 def _vector_search_sync(
@@ -71,17 +77,26 @@ def hybrid_search(
     if alpha is None:
         alpha = settings.hybrid_search_alpha
     
-    query_vector = get_embedding_vector(query)
     search_top_k = top_k * 2
-    
-    future_vector = _executor.submit(
-        _vector_search_sync,
-        query_vector,
-        organization_id,
-        search_top_k,
-        filters,
-        domain,
-    )
+
+    # Embedding failure (LLM provider down, timeout) must not kill the request:
+    # degrade to BM25-only lexical search.
+    try:
+        query_vector = get_embedding_vector(query)
+    except Exception as e:
+        logger.warning("Embedding failed, degrading to BM25-only search: %s", e)
+        query_vector = None
+
+    future_vector = None
+    if query_vector is not None:
+        future_vector = _executor.submit(
+            _vector_search_sync,
+            query_vector,
+            organization_id,
+            search_top_k,
+            filters,
+            domain,
+        )
     future_bm25 = _executor.submit(
         _bm25_search_sync,
         organization_id,
@@ -89,8 +104,8 @@ def hybrid_search(
         search_top_k,
         filters,
     )
-    
-    vector_results = future_vector.result()
+
+    vector_results = future_vector.result() if future_vector else []
     bm25_results = future_bm25.result()
     
     chunk_map: dict[str, dict[str, Any]] = {}

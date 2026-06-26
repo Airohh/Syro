@@ -58,6 +58,12 @@ test-worker: ## Lancer uniquement les tests worker
 test-docker: ## Lancer les tests dans Docker
 	docker compose -f infra/docker-compose.yml exec syro-api pytest
 
+smoke: ## Smoke test post-deploiement (API + Qdrant + Redis + MLflow)
+	python scripts/smoke_test.py
+
+eval: ## Evaluation RAGAS reproductible (necessite OPENAI_API_KEY ou USE_OLLAMA=true)
+	python evaluation/evaluate.py
+
 lint: ## Lancer le linting (ruff)
 	ruff check app worker tests
 	ruff format --check app worker tests

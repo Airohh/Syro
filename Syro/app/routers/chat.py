@@ -65,9 +65,10 @@ def send_message(
     except Exception as e:
         logger.error(f"Error in send_message: {type(e).__name__}: {str(e)}", exc_info=True)
         db.rollback()
+        # Détails de l'exception réservés aux logs (pas d'info disclosure côté client)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors du traitement du message: {str(e)}"
+            detail="Erreur lors du traitement du message. Consultez les logs serveur.",
         )
 
 @router.post("/message/stream")
