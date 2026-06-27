@@ -1,158 +1,89 @@
-"""Tests pour la validation des uploads."""
+"""Tests pour la validation des uploads (app.security.upload_validator).
+
+Cible l'API réelle du module : validate_file_size + constantes.
+Le sniff libmagic a été retiré du code ; aucun test n'en dépend.
+"""
+
+import io
+import types
 
 import pytest
 from fastapi import HTTPException
 
 from app.security.upload_validator import (
-    validate_file_content,
-    validate_filename,
-    validate_text_content,
+    validate_file_size,
     ALLOWED_MIME_TYPES,
     ALLOWED_EXTENSIONS,
     MAX_FILE_SIZE,
+    MAX_TEXT_SIZE,
+    UploadValidationError,
 )
 
-class TestValidateFilename:
-    """Tests pour validate_filename."""
-    
-    def test_valid_filename(self):
-        """Test avec un nom de fichier valide."""
-        result = validate_filename("document.pdf")
-        assert result == "document.pdf"
-    
-    def test_filename_with_path_traversal(self):
-        """Test que les path traversal sont rejetés."""
-        # Le validate_filename normalise le path, donc "../../../etc/passwd" devient "passwd"
-        # Testons avec un nom qui contient vraiment des caractères dangereux après normalisation
-        result = validate_filename("../../../etc/passwd")
-        # Après normalisation, ça devrait être juste "passwd"
-        assert result == "passwd"  # La fonction normalise en enlevant les paths
-    
-    def test_filename_with_dangerous_chars(self):
-        """Test que les caractères dangereux sont rejetés."""
-        dangerous_names = [
-            "file<name>.pdf",
-            "file>name.pdf",
-            "file|name.pdf",
-            "file:name.pdf",
-            "file*name.pdf",
-            "file?name.pdf",
-            "file\"name.pdf",
-        ]
-        
-        for name in dangerous_names:
-            with pytest.raises(HTTPException):
-                validate_filename(name)
-    
-    def test_filename_too_long(self):
-        """Test que les noms trop longs sont rejetés."""
-        long_name = "a" * 256
-        with pytest.raises(HTTPException) as exc:
-            validate_filename(long_name)
-        assert exc.value.status_code == 400
-    
-    def test_empty_filename(self):
-        """Test qu'un nom vide est rejeté."""
-        with pytest.raises(HTTPException) as exc:
-            validate_filename("")
-        assert exc.value.status_code == 400
 
-class TestValidateFileContent:
-    """Tests pour validate_file_content."""
-    
-    def test_valid_pdf(self):
-        """Test avec un PDF valide."""
-        # PDF minimal valide
-        pdf_content = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
-        
-        mime_type, extension = validate_file_content(
-            pdf_content,
-            filename="test.pdf",
-            mime_type="application/pdf",
-            max_size=MAX_FILE_SIZE
-        )
-        
-        assert mime_type == "application/pdf" or mime_type == "application/octet-stream"
-    
-    def test_file_too_large(self):
-        """Test qu'un fichier trop gros est rejeté."""
-        large_content = b"x" * (MAX_FILE_SIZE + 1)
-        
+def _file_with_size(size):
+    """UploadFile-like exposant directement l'attribut .size."""
+    return types.SimpleNamespace(size=size)
+
+
+class _FileWithoutSize:
+    """UploadFile-like sans .size : force le fallback seek/tell sur .file."""
+
+    def __init__(self, data: bytes):
+        self.file = io.BytesIO(data)
+
+
+class TestValidateFileSize:
+    def test_under_limit_passes(self):
+        # Ne lève pas
+        validate_file_size(_file_with_size(1024), max_size=MAX_FILE_SIZE)
+
+    def test_over_limit_raises_413(self):
         with pytest.raises(HTTPException) as exc:
-            validate_file_content(
-                large_content,
-                filename="large.pdf",
-                mime_type="application/pdf",
-                max_size=MAX_FILE_SIZE
-            )
+            validate_file_size(_file_with_size(MAX_FILE_SIZE + 1), max_size=MAX_FILE_SIZE)
         assert exc.value.status_code == 413
-    
-    def test_empty_file(self):
-        """Test qu'un fichier vide est rejeté."""
-        with pytest.raises(HTTPException) as exc:
-            validate_file_content(b"", filename="empty.pdf")
-        assert exc.value.status_code == 400
-    
-    def test_allowed_mime_types(self):
-        """Test que les types MIME autorisés sont acceptés."""
-        for mime_type in list(ALLOWED_MIME_TYPES)[:5]:  # Tester quelques types
-            content = b"test content"
-            try:
-                validate_file_content(
-                    content,
-                    filename="test.txt",
-                    mime_type=mime_type,
-                    max_size=1000
-                )
-            except HTTPException:
-                # Si ça échoue, c'est peut-être à cause de la détection magique
-                # Ce n'est pas grave pour ce test
-                pass
-    
-    def test_disallowed_mime_type(self):
-        """Test qu'un type MIME non autorisé est rejeté."""
-        content = b"test content"
-        
-        # Si l'extension est dans ALLOWED_EXTENSIONS mais le MIME type non, ça peut passer
-        # Testons avec un fichier vraiment dangereux
-        try:
-            validate_file_content(
-                content,
-                filename="test.exe",
-                mime_type="application/x-msdownload",  # .exe
-                max_size=1000
-            )
-            # Si ça passe, c'est peut-être à cause de la détection magique qui échoue
-            # Ce n'est pas grave pour ce test
-        except HTTPException as exc:
-            assert exc.status_code == 415
 
-class TestValidateTextContent:
-    """Tests pour validate_text_content."""
-    
-    def test_valid_text(self):
-        """Test avec du texte valide."""
-        text = "This is a valid text content."
-        validate_text_content(text, max_size=MAX_FILE_SIZE)
-        # Ne devrait pas lever d'exception
-    
-    def test_text_too_large(self):
-        """Test qu'un texte trop gros est rejeté."""
-        large_text = "x" * (MAX_FILE_SIZE + 1)
-        
+    def test_at_limit_passes(self):
+        # size == max_size : autorisé (strictement supérieur seulement rejeté)
+        validate_file_size(_file_with_size(MAX_FILE_SIZE), max_size=MAX_FILE_SIZE)
+
+    def test_size_none_fallback_computes_from_stream(self):
+        # .size absent -> taille déduite via seek/tell sur le flux sous-jacent
+        big = _FileWithoutSize(b"x" * 50)
         with pytest.raises(HTTPException) as exc:
-            validate_text_content(large_text, max_size=MAX_FILE_SIZE)
+            validate_file_size(big, max_size=10)
         assert exc.value.status_code == 413
-    
-    def test_empty_text(self):
-        """Test qu'un texte vide est rejeté."""
-        with pytest.raises(HTTPException) as exc:
-            validate_text_content("")
-        assert exc.value.status_code == 400
-    
-    def test_whitespace_only_text(self):
-        """Test qu'un texte avec seulement des espaces est rejeté."""
-        with pytest.raises(HTTPException) as exc:
-            validate_text_content("   \n\t  ")
-        assert exc.value.status_code == 400
 
+    def test_size_none_fallback_under_limit_passes(self):
+        small = _FileWithoutSize(b"x" * 5)
+        validate_file_size(small, max_size=10)
+
+    def test_undeterminable_size_passes(self):
+        # Ni .size ni .file exploitable -> on laisse passer (pas de faux positif)
+        broken = types.SimpleNamespace()  # pas de .size, pas de .file
+        validate_file_size(broken, max_size=10)
+
+    def test_custom_max_size(self):
+        with pytest.raises(HTTPException):
+            validate_file_size(_file_with_size(200), max_size=100)
+
+
+class TestConstants:
+    def test_pdf_mime_allowed(self):
+        assert "application/pdf" in ALLOWED_MIME_TYPES
+
+    def test_common_extensions_allowed(self):
+        for ext in (".pdf", ".txt", ".md", ".csv", ".docx", ".xlsx"):
+            assert ext in ALLOWED_EXTENSIONS
+
+    def test_executable_not_allowed(self):
+        assert ".exe" not in ALLOWED_EXTENSIONS
+        assert "application/x-msdownload" not in ALLOWED_MIME_TYPES
+
+    def test_size_limits(self):
+        assert MAX_FILE_SIZE == 100 * 1024 * 1024
+        assert MAX_TEXT_SIZE == 10 * 1024 * 1024
+        assert MAX_TEXT_SIZE < MAX_FILE_SIZE
+
+
+def test_upload_validation_error_is_exception():
+    assert issubclass(UploadValidationError, Exception)

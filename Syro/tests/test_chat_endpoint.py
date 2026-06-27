@@ -10,7 +10,7 @@ from unittest.mock import patch
 from app.main import app
 from app.schemas import MessageCreate
 from app.db import get_db
-from app.dependencies import get_current_user, require_active_org
+from app.dependencies import get_current_user, get_current_org
 
 
 @pytest.fixture
@@ -51,6 +51,15 @@ def test_db_path(tmp_path):
             sender_type TEXT,
             sender_id INTEGER,
             content TEXT
+        );
+        CREATE TABLE IF NOT EXISTS usage_events (
+            id INTEGER PRIMARY KEY,
+            organization_id INTEGER NOT NULL,
+            user_id INTEGER,
+            event_type TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            metadata TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         INSERT INTO organizations (id, name, status) VALUES (1, 'Test Org', 'active');
         INSERT INTO users (id, organization_id, email, role) VALUES (1, 1, 'test@example.com', 'member');
@@ -95,7 +104,7 @@ class TestChatEndpoint:
 
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = lambda: mock_user
-        app.dependency_overrides[require_active_org()] = lambda: mock_org
+        app.dependency_overrides[get_current_org] = lambda: mock_org
 
         mock_build_answer.return_value = ("Réponse", 5, [])
 
@@ -146,7 +155,7 @@ class TestChatDomainEndpoint:
 
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = lambda: mock_user
-        app.dependency_overrides[require_active_org()] = lambda: mock_org
+        app.dependency_overrides[get_current_org] = lambda: mock_org
 
         mock_build_answer.return_value = (
             "Réponse médicale",

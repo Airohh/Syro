@@ -37,5 +37,4 @@ opentelemetry-sdk==1.22.0
 opentelemetry-exporter-otlp==1.22.0
 opentelemetry-instrumentation-fastapi==0.43b0
 opentelemetry-instrumentation-httpx==0.43b0
-python-magic==0.4.27
 ruff==0.1.9
