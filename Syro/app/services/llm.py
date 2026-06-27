@@ -70,54 +70,18 @@ class LLMProvider:
         base_url = settings.ollama_base_url or "http://localhost:11434/v1"
         
         try:
-            # Check GPU availability (direct CUDA check + Ollama status)
+            # GPU info purement cosmétique (Ollama gère son propre placement
+            # device) : un simple check torch.cuda pour le log, sans sondes
+            # subprocess nvidia-smi/ollama coûteuses.
             gpu_info = ""
-            gpu_available = False
             if settings.ollama_use_gpu:
-                # Method 1: Direct CUDA check (most reliable)
                 try:
                     import torch
                     if torch.cuda.is_available():
-                        gpu_available = True
                         gpu_info = f" (GPU: {torch.cuda.get_device_name(0)})"
-                except ImportError:
-                    pass
                 except Exception:
                     pass
-                
-                # Method 2: Check nvidia-smi (fallback)
-                if not gpu_available:
-                    try:
-                        import subprocess
-                        result = subprocess.run(
-                            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                            capture_output=True,
-                            text=True,
-                            timeout=2,
-                        )
-                        if result.returncode == 0 and result.stdout.strip():
-                            gpu_available = True
-                            gpu_name = result.stdout.strip().split("\n")[0]
-                            gpu_info = f" (GPU: {gpu_name})"
-                    except Exception:
-                        pass
-                
-                # Method 3: Check Ollama status (last resort)
-                if not gpu_available:
-                    try:
-                        import subprocess
-                        result = subprocess.run(
-                            ["ollama", "ps"],
-                            capture_output=True,
-                            text=True,
-                            timeout=2,
-                        )
-                        if "gpu" in result.stdout.lower() or "cuda" in result.stdout.lower():
-                            gpu_available = True
-                            gpu_info = " (GPU enabled via Ollama)"
-                    except Exception:
-                        pass
-            
+
             self._embedder = OpenAIEmbeddings(
                 model=settings.embeddings_model,
                 api_key="ollama",  # Ollama doesn't need a real key, but langchain requires something
