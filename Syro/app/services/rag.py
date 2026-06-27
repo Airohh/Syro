@@ -6,8 +6,6 @@ import logging
 import time
 from typing import Any, Sequence
 
-import numpy as np
-
 from ..db import db_session
 from ..config import settings
 
@@ -99,45 +97,6 @@ def index_document_content(
     
     return len(chunk_data)
 
-def retrieve_chunks(
-    organization_id: int,
-    query: str,
-    top_k: int | None = None,
-    filters: dict[str, Any] | None = None,
-    use_hybrid: bool = True,
-    domain: str | None = None,
-) -> Sequence[str]:
-    if top_k is None:
-        top_k = settings.rerank_top_k
-    
-    if use_hybrid:
-        results = hybrid_search(
-            organization_id=organization_id,
-            query=query,
-            top_k=top_k,
-            filters=filters,
-            domain=domain,
-        )
-        return [r["text"] for r in results]
-    else:
-        try:
-            query_vector = get_embedding_vector(query)
-        except Exception as e:
-            logger.warning("Embedding failed, vector-only retrieval unavailable: %s", e)
-            return []
-        vector_store = VectorStore()
-        try:
-            results = vector_store.search(
-                query_vector=query_vector,
-                organization_id=organization_id,
-                top_k=top_k,
-                filters=filters,
-                domain=domain,
-            )
-            return [r["text"] for r in results]
-        except VectorStoreError:
-            return []
-
 def retrieve_chunks_with_metadata(
     organization_id: int,
     query: str,
@@ -148,7 +107,7 @@ def retrieve_chunks_with_metadata(
 ) -> list[dict[str, Any]]:
     if top_k is None:
         top_k = settings.rerank_top_k
-    
+
     if use_hybrid:
         return hybrid_search(
             organization_id=organization_id,
@@ -157,20 +116,39 @@ def retrieve_chunks_with_metadata(
             filters=filters,
             domain=domain,
         )
-    else:
-        try:
-            query_vector = get_embedding_vector(query)
-        except Exception as e:
-            logger.warning("Embedding failed, vector-only retrieval unavailable: %s", e)
-            return []
-        vector_store = VectorStore()
-        try:
-            return vector_store.search(
-                query_vector=query_vector,
-                organization_id=organization_id,
-                top_k=top_k,
-                filters=filters,
-                domain=domain,
-            )
-        except VectorStoreError:
-            return []
+
+    # Vector-only : embedding requis. En échec → pas de fallback BM25 ici.
+    try:
+        query_vector = get_embedding_vector(query)
+    except Exception as e:
+        logger.warning("Embedding failed, vector-only retrieval unavailable: %s", e)
+        return []
+    try:
+        return VectorStore().search(
+            query_vector=query_vector,
+            organization_id=organization_id,
+            top_k=top_k,
+            filters=filters,
+            domain=domain,
+        )
+    except VectorStoreError:
+        return []
+
+def retrieve_chunks(
+    organization_id: int,
+    query: str,
+    top_k: int | None = None,
+    filters: dict[str, Any] | None = None,
+    use_hybrid: bool = True,
+    domain: str | None = None,
+) -> Sequence[str]:
+    """Projection texte-seul de retrieve_chunks_with_metadata."""
+    results = retrieve_chunks_with_metadata(
+        organization_id=organization_id,
+        query=query,
+        top_k=top_k,
+        filters=filters,
+        use_hybrid=use_hybrid,
+        domain=domain,
+    )
+    return [r["text"] for r in results]

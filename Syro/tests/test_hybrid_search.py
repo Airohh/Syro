@@ -28,6 +28,7 @@ class TestHybridSearch:
         mock_settings.rerank_top_k = 5
         mock_settings.retrieval_top_k = 5
         mock_settings.hybrid_search_alpha = 0.5
+        mock_settings.rrf_k = 60
         
         mock_get_embedding.return_value = np.array([0.1] * 384)
         
@@ -75,6 +76,7 @@ class TestHybridSearch:
         mock_settings.rerank_top_k = 5
         mock_settings.retrieval_top_k = 5
         mock_settings.hybrid_search_alpha = 0.5
+        mock_settings.rrf_k = 60
         mock_settings.enable_reranking = False
 
         mock_get_embedding.return_value = np.array([0.1] * 384)
@@ -112,6 +114,7 @@ class TestHybridSearch:
         mock_settings.rerank_top_k = 5
         mock_settings.retrieval_top_k = 5
         mock_settings.hybrid_search_alpha = 0.5
+        mock_settings.rrf_k = 60
         mock_settings.enable_reranking = False
 
         mock_get_embedding.return_value = np.array([0.1] * 384)
@@ -146,6 +149,7 @@ class TestHybridSearch:
         mock_settings.rerank_top_k = 5
         mock_settings.retrieval_top_k = 5
         mock_settings.hybrid_search_alpha = 0.5
+        mock_settings.rrf_k = 60
         mock_settings.enable_reranking = False
 
         mock_get_embedding.side_effect = RuntimeError("LLM provider not configured")
@@ -169,3 +173,48 @@ class TestHybridSearch:
         assert results[0]["text"] == "bm25 result 1"
         mock_vector_store.search.assert_not_called()
         mock_bm25_search.search.assert_called_once()
+
+    @patch('app.services.hybrid_search.bm25_search')
+    @patch('app.services.hybrid_search.VectorStore')
+    @patch('app.services.hybrid_search.get_embedding_vector')
+    @patch('app.services.hybrid_search.settings')
+    def test_rrf_ranks_chunk_present_in_both_lists_first(
+        self,
+        mock_settings,
+        mock_get_embedding,
+        mock_vector_store_class,
+        mock_bm25_search
+    ):
+        """RRF : un chunk présent dans les deux listes domine (somme des rangs)."""
+        mock_settings.rerank_top_k = 5
+        mock_settings.retrieval_top_k = 5
+        mock_settings.rrf_k = 60
+        mock_settings.enable_reranking = False
+
+        mock_get_embedding.return_value = np.array([0.1] * 384)
+
+        mock_vector_store = Mock()
+        mock_vector_store_class.return_value = mock_vector_store
+        # B au rang 1 côté vecteur
+        mock_vector_store.search.return_value = [
+            {"text": "A", "score": 0.9, "metadata": {}, "chunk_id": "A"},
+            {"text": "B", "score": 0.8, "metadata": {}, "chunk_id": "B"},
+        ]
+        # B au rang 0 côté BM25 -> présent dans les deux listes
+        mock_bm25_search.search.return_value = [
+            {"text": "B", "score": 0.7, "metadata": {}, "chunk_id": "B"},
+            {"text": "C", "score": 0.6, "metadata": {}, "chunk_id": "C"},
+        ]
+
+        results = hybrid_search(
+            organization_id=1,
+            query="test query",
+            top_k=5,
+            domain="tech",
+        )
+
+        # B fusionné (rangs v1 + b0) > A (v0) > C (b1). 3 chunks distincts.
+        assert [r["chunk_id"] for r in results] == ["B", "A", "C"]
+        # Score brut conservé pour observabilité (non utilisé au tri).
+        b = next(r for r in results if r["chunk_id"] == "B")
+        assert b["vector_score"] == 0.8 and b["bm25_score"] == 0.7
