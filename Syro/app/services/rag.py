@@ -109,17 +109,45 @@ def retrieve_chunks_with_metadata(
     filters: dict[str, Any] | None = None,
     use_hybrid: bool = True,
     domain: str | None = None,
+    allowed_document_ids: frozenset[int] | None = None,
+    history: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     if top_k is None:
         top_k = settings.rerank_top_k
 
     if use_hybrid:
+        if settings.enable_query_decomposition:
+            from .decompose import retrieve_decomposed
+
+            return retrieve_decomposed(
+                organization_id=organization_id,
+                query=query,
+                top_k=top_k,
+                filters=filters,
+                domain=domain,
+                allowed_document_ids=allowed_document_ids,
+                history=history,
+            )
+        if settings.enable_crag:
+            from .crag import retrieve_with_crag
+
+            return retrieve_with_crag(
+                organization_id=organization_id,
+                query=query,
+                top_k=top_k,
+                filters=filters,
+                domain=domain,
+                allowed_document_ids=allowed_document_ids,
+                history=history,
+            )
         return hybrid_search(
             organization_id=organization_id,
             query=query,
             top_k=top_k,
             filters=filters,
             domain=domain,
+            allowed_document_ids=allowed_document_ids,
+            history=history,
         )
 
     # Vector-only : embedding requis. En échec → pas de fallback BM25 ici.
@@ -135,6 +163,7 @@ def retrieve_chunks_with_metadata(
             top_k=top_k,
             filters=filters,
             domain=domain,
+            allowed_document_ids=allowed_document_ids,
         )
     except VectorStoreError:
         return []
@@ -146,6 +175,8 @@ def retrieve_chunks(
     filters: dict[str, Any] | None = None,
     use_hybrid: bool = True,
     domain: str | None = None,
+    allowed_document_ids: frozenset[int] | None = None,
+    history: list[str] | None = None,
 ) -> Sequence[str]:
     """Projection texte-seul de retrieve_chunks_with_metadata."""
     results = retrieve_chunks_with_metadata(
@@ -155,5 +186,7 @@ def retrieve_chunks(
         filters=filters,
         use_hybrid=use_hybrid,
         domain=domain,
+        allowed_document_ids=allowed_document_ids,
+        history=history,
     )
     return [r["text"] for r in results]

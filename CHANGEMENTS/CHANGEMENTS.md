@@ -7,7 +7,120 @@
 
 ---
 
-## Session 2026-06-28 (PM) — Code review, fixes résilience & suite lean (T0.0 ✅, T0.2 ✅)
+## Session 2026-06-28 — T1.3 Langfuse + T1.4 gate retrieval
+
+### T1.3 ✅ — tracing Langfuse
+- `app/services/langfuse_tracer.py` : trace racine + spans retrieval/generation ; no-op si off.
+- `build_answer` unifié (multi-domaine + single) avec instrumentation Langfuse.
+- `infra/docker-compose.langfuse.yml` : profil `--profile langfuse` (Postgres + Langfuse v2).
+- `langfuse>=2,<3` dans requirements ; tests `test_langfuse_tracer.py` (4).
+
+### T1.4 ✅ — gate seuils retrieval
+- `evaluation/validate_retrieval_thresholds.py` + `retrieval_thresholds.json`.
+- `make eval-retrieval-gate` (skip si pas de report.json).
+- Tests `test_retrieval_gate.py` (3).
+
+**99 tests verts.**
+
+---
+
+## Session 2026-06-28 — Vérification globale + T3.3 decomposition
+
+### Vérification (audit session)
+- **92 tests verts** (`pytest tests/ -q`)
+- **Golden set** : 100 paires, `make eval-gate` OK
+- **Imports** : smoke OK ; flags opt-in tous `false` par défaut
+- **Pipeline chat** : router → history → scope permissions → retrieval → Self-RAG → LLM
+- **Pipeline eval** : `retrieve_chunks_with_metadata` direct (pas Self-RAG/history — intentionnel pour métriques retrieval)
+- **Lint** : 1 fix F841 `chat.py` ; E402 pré-existants dans `rag.py` (imports après logger)
+- **Non commité** : ~15 fichiers nouveaux/modifiés sur branche locale
+
+### T3.3 ✅ — query decomposition multi-hop
+- `app/services/decompose.py` : split `?` / `;` + LLM fallback ; retrieval parallèle ; fusion RRF ; rerank.
+- `rag.py` : `enable_query_decomposition` prioritaire sur CRAG.
+- Tests : `test_decompose.py` (7).
+
+---
+
+## Session 2026-06-28 — T3.2 Self-RAG
+
+### T3.2 ✅ — filtrage IsRel par chunk
+- `app/services/self_rag.py` : score heuristique (overlap lexical + force retrieval) ; drop sous `self_rag_min_relevance` ; garde 3–8 chunks.
+- `chat.py` : `_filter_chunk_results` après retrieval (multi-domaine, sync, stream) ; chemins unifiés sur `retrieve_chunks_with_metadata`.
+- `config.py` : `ENABLE_SELF_RAG=false`, seuils min/max chunks.
+- Tests : `test_self_rag.py` (7).
+
+**85 tests verts.**
+
+> Prochaine : **T3.3 query decomposition** ou finition E1 (T1.3 Langfuse, T1.4 gate live).
+
+---
+
+## Session 2026-06-28 (nuit) — T3.1 CRAG
+
+### T3.1 ✅ — corrective retrieval
+- `app/services/crag.py` : évaluateur léger (overlap lexical + score RRF top-1) → verdict correct/ambiguous/incorrect.
+- Si faible : retry `hybrid_search` avec `top_k×2`, `expand_queries(force=True)` (reformulations même si T2.1 off).
+- `rag.py` : branche `enable_crag` ; `hybrid_search` accepte `queries` explicites.
+- `config.py` : `ENABLE_CRAG=false`, seuils `crag_retry_threshold` / `crag_incorrect_threshold`.
+- Tests : `test_crag.py` (10).
+
+**78 tests verts** (suite complète).
+
+> Prochaine : **T3.2 Self-RAG** ou finition E1 (T1.3 Langfuse, T1.4 gate live, revue DA T1.1).
+
+---
+
+## Session 2026-06-28 (nuit) — T2.4 filtrage retrieval + T2.5 historique conversationnel
+
+### T2.4 ✅ — metadata filtering avant ANN
+- `app/services/retrieval_filters.py` : `RetrievalScope`, `build_retrieval_scope(user_id, org_id, domain)` ; `user_id=None` pour l'éval (pas de filtre permissions).
+- `vector_store.py` : `allowed_document_ids` → filtre Qdrant `MatchAny` ; set vide → `[]` sans appel Qdrant.
+- `bm25_search.py` : filtre document + domain **avant** scoring BM25.
+- `hybrid_search.py`, `rag.py`, `multi_domain_rag.py`, `chat.py` : propagation scope + history.
+- `routers/chat.py` : `user_id` passé à `build_answer` / stream (4 endpoints).
+- Tests : `test_retrieval_filters.py` (7).
+
+### T2.5 ✅ — historique dans retrieval + prompt
+- `load_conversation_history(db, conversation_id, limit=6)` ; router charge l'historique avant le message user.
+- `llm.py` : `conversation_history` dans `chat` / `chat_stream` / `answer_from_context*`.
+- Tests : `test_conversation_history.py` (1) ; fix mock BM25 hybrid (`allowed_document_ids` kwarg).
+
+**68 tests verts.** E2 (T2.1–T2.5) code complet — mesures live via `make tune` / `make eval` quand stack dispo.
+
+> Prochaine : **T3.1 CRAG** ou finition E1 (T1.3 Langfuse, T1.4 gate live, revue DA T1.1).
+
+---
+
+## Session 2026-06-28 (soir) — T2.2 HyDE + T2.3 tuning RRF
+
+### T2.2 ✅ — HyDE
+- `app/services/hyde.py` : passage hypothétique LLM → embedding → liste vectorielle additionnelle fusionnée par RRF.
+- `enable_hyde=false` par défaut (`ENABLE_HYDE=true` pour activer).
+- Tests : `test_hyde.py` (5).
+
+### T2.3 ✅ — grid-search `rrf_k`
+- `evaluation/tune.py` : compare `rrf_k ∈ {30,40,60}` sur golden set (retrieval-only), sortie `tune_report.json`.
+- `make tune` ; tests `test_tune.py` (4).
+- Note : fusion α abandonnée → seul `rrf_k` est tunable.
+
+**60 tests verts.**
+
+> Prochaine : **T2.4** (metadata filtering Qdrant/BM25) ou **T2.5** (historique conversationnel) ; mesures T2.1–T2.3 via `make tune` / `make eval` quand stack dispo.
+
+---
+
+## Session 2026-06-28 (soir) — T2.1 query rewriting
+
+### T2.1 ✅ — query rewriting (`feat(retrieval)`)
+- `app/services/query_rewriter.py` : reformulations LLM (1–2 variantes + question originale), déduplication, fallback gracieux si LLM KO.
+- `hybrid_search.py` : retrieval multi-variantes fusionné par RRF ; batch embeddings ; param `history` optionnel.
+- `config.py` : `enable_query_rewriting=false` (opt-in via `ENABLE_QUERY_REWRITING=true`), `query_rewrite_max_variants=2`.
+- Tests : **51 verts** (+6 `test_query_rewriter`, +1 hybrid multi-variante).
+
+> Prochaine : T2.3 (tuning RRF, sans stack) ou T2.2 (HyDE) ; mesure T2.1 sur golden set quand stack dispo. E1 : T1.3 Langfuse (infra), finition T1.1 DA.
+
+---
 
 Branche : `fix/chat-500-resilience` · **9 commits, pushés** (`454a2aa..e7d31d6`).
 

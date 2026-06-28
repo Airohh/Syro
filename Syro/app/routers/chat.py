@@ -10,6 +10,7 @@ from ..services.chat import (
     build_answer,
     build_answer_stream,
     create_conversation_if_needed,
+    load_conversation_history,
     store_message,
 )
 from ..db import get_db
@@ -47,6 +48,7 @@ def send_message(
         conversation_id = create_conversation_if_needed(
             db, org["id"], payload.conversation_id
         )
+        history = load_conversation_history(db, conversation_id)
         store_message(db, conversation_id, "user", payload.content, user["id"])
         
         logger.info(f"Building answer for org {org['id']}, query: {payload.content[:50]}...")
@@ -54,6 +56,8 @@ def send_message(
             org["id"],
             payload.content,
             include_sources=True,
+            user_id=user["id"],
+            conversation_history=history,
         )
         
         store_message(db, conversation_id, "assistant", answer, None)
@@ -94,12 +98,18 @@ def send_message_stream(
     conversation_id = create_conversation_if_needed(
         db, org["id"], payload.conversation_id
     )
+    history = load_conversation_history(db, conversation_id)
     store_message(db, conversation_id, "user", payload.content, user["id"])
 
     def generate():
         full_answer = ""
         try:
-            for chunk in build_answer_stream(org["id"], payload.content):
+            for chunk in build_answer_stream(
+                org["id"],
+                payload.content,
+                user_id=user["id"],
+                conversation_history=history,
+            ):
                 full_answer += chunk
                 yield _sse(chunk)
 
@@ -146,6 +156,7 @@ def send_message_for_domain(
         conversation_id = create_conversation_if_needed(
             db, org["id"], payload.conversation_id
         )
+        history = load_conversation_history(db, conversation_id)
         store_message(db, conversation_id, "user", payload.content, user["id"])
         answer, usage, sources = build_answer(
             organization_id=org["id"],
@@ -153,6 +164,8 @@ def send_message_for_domain(
             include_sources=True,
             auto_detect_domain=False,
             domain=domain,
+            user_id=user["id"],
+            conversation_history=history,
         )
         store_message(db, conversation_id, "assistant", answer, None)
         db.execute(
@@ -199,6 +212,7 @@ def send_message_stream_for_domain(
     conversation_id = create_conversation_if_needed(
         db, org["id"], payload.conversation_id
     )
+    history = load_conversation_history(db, conversation_id)
     store_message(db, conversation_id, "user", payload.content, user["id"])
 
     def generate():
@@ -209,6 +223,8 @@ def send_message_stream_for_domain(
                 query=payload.content,
                 auto_detect_domain=False,
                 domain=domain,
+                user_id=user["id"],
+                conversation_history=history,
             ):
                 full_answer += chunk
                 yield _sse(chunk)

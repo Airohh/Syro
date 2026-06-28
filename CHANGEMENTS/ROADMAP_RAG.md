@@ -4,10 +4,11 @@
 >
 > **Sources** : analyse du graphe graphify (1593 nœuds), lecture du code, doc d'architecture interne, best practices RAG 2026 (Pramana, Ultra-RAG, Onyx, WeKnora, NVIDIA RAG Blueprint).
 >
-> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 Phase 0 (E0) complète · E1 en cours (T1.1 🟡 golden set 100, T1.2 ✅ métriques retrieval, T1.4 🟡 gate intégrité CI) → reste T1.3 (Langfuse), seuil qualité T1.4
+> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 E0 complète · E1 en cours · **E2** T2.1–T2.3 ✅ code
 
 > **Journal de progression**
-> - `2026-06-28` — **T1.4 🟡** : gate déterministe d'intégrité du golden set en CI (`validate_golden_set.py` + `tests/test_golden_set.py`, `make eval-gate`). Reste seuil qualité retrieval-live + RAGAS (coût/infra).
+> - `2026-06-28` — **T2.3 ✅** : `evaluation/tune.py` grid-search `rrf_k` (30/40/60) sur golden set ; `make tune` ; tests `test_tune.py` (4).
+> - `2026-06-28` — **T2.2 ✅** : HyDE (`hyde.py`, flag `enable_hyde`, vecteur additionnel dans `hybrid_search`) ; tests `test_hyde.py` (5).
 > - `2026-06-28` — **T1.2 ✅** : métriques retrieval déterministes (`evaluation/metrics.py` : Recall@K, nDCG, MRR, Precision@K, refus OOB) testées ; `evaluate.py` sépare retrieval/génération dans `report.json`.
 > - `2026-06-28` — **T1.1 🟡** : golden set étendu à 100 paires (4 buckets, `relevant_doc_ids` sur 72), générateur `build_golden_set.py`. Reste relecture DA + annotation des 20 legacy.
 > - `2026-06-28` — **Phase 0 (E0) complète** : T0.0–T0.4 tous ✅.
@@ -67,11 +68,11 @@ S'y ajoute une **dette technique ciblée** : duplication ingestion (worker vs se
 | Résilience | 🟢 | Circuit breaker, retries, dégradation gracieuse, fallback Celery→BackgroundTasks. |
 | Observabilité infra | 🟢 | Prometheus + OpenTelemetry + correlation IDs + logs JSON. |
 | Éval | 🟡 | RAGAS + bench latence présents, mais golden set ~20 paires (cible 100–200). |
-| Query understanding | 🔴 | Question brute envoyée au retrieval. Pas de rewriting/HyDE/expansion. |
-| Historique conversationnel | 🟡 | Tours stockés (`conversations`/`messages`) mais **jamais réinjectés** dans `build_answer`/prompt → questions de suivi mal servies (T2.5). |
-| Agentic / corrective | 🔴 | Pipeline linéaire. `agent.py` existe mais = **wrapper persona** (nom + personnalité sur `retrieve→answer`), pas d'orchestration. Pas de CRAG/Self-RAG/GraphRAG/self-critique. |
-| Tests | 🟡 | Suite historique supprimée ; **suite lean en place** (T0.0 ✅, 25 tests, job CI bloquant) couvrant RRF/BM25/résilience chat/ingestion/extraction/secrets-CORS. Reste à étoffer au fil des features. |
-| Tracing RAG | 🔴 | MLflow (model tracking) ≠ trace chunk/score/prompt par requête (Langfuse). |
+| Query understanding | 🟡 | Rewriting/HyDE livrés (opt-in, T2.1–T2.2) ; mesure golden set en attente stack. |
+| Historique conversationnel | 🟢 | T2.5 ✅ : `load_conversation_history` → retrieval (`history`) + prompt LLM ; flag rewriting réutilisable. |
+| Agentic / corrective | 🟡 | T3.1–T3.3 livrés (opt-in) ; T3.4 GraphRAG backlog. |
+| Tests | 🟡 | Suite lean **99 tests** (T0.0 ✅) : retrieval, agentique, Langfuse, gates eval. |
+| Tracing RAG | 🟡 | T1.3 Langfuse livré (opt-in) ; validation UI avec stack `--profile langfuse`. |
 | Ingestion multimodale | 🔴 | Texte seul. `_extract_docx` ignore tableaux/images. |
 | Structure code | 🟡 | `app/services/` plat (22 fichiers), 247 micro-communautés = couplage transversal. |
 | Duplication ingestion | 🟢 | Résolu (T0.3) : `run_ingestion()` + `infer_metadata()` partagés ; worker et BackgroundTasks délèguent. |
@@ -294,17 +295,14 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 - **Acceptation** : rapport séparant retrieval-metrics et generation-metrics.
 
 #### T1.3 — Intégrer Langfuse (tracing RAG)
-- **P1 · Story · 5 SP · S2 · PE · dépend : —**
+- **P1 · Story · 5 SP · S2 · PE · dépend : —** · Statut : ✅ **Code livré (2026-06-28)** — `LANGFUSE_ENABLED=false` par défaut. **Reste** : valider trace complète dans UI Langfuse avec stack live.
 - **Pourquoi** : MLflow ne montre pas le détail par requête ; Langfuse est le standard 2026.
-- **Étapes** :
-  1. `docker-compose` : Langfuse self-hosted (+ ClickHouse).
-  2. Instrumenter `hybrid_search`, `reranker`, `build_answer` (spans, ou via OTel→Langfuse).
-  3. Logguer : query, candidats + `vector/bm25/rrf/final_score`, prompt final, réponse, latences.
-- **Fichiers** : `infra/docker-compose.*.yml`, `app/services/hybrid_search.py`, `reranker.py`, `chat.py`, `config.py`.
-- **Acceptation** : une requête chat apparaît dans Langfuse avec toutes les étapes et scores.
+- **Livré** : `langfuse_tracer.py` (no-op si off) ; spans retrieval + generation dans `build_answer` ; `docker-compose.langfuse.yml` (profil optionnel) ; `langfuse` dans requirements.
+- **Fichiers** : `app/services/langfuse_tracer.py`, `chat.py`, `config.py`, `infra/docker-compose.langfuse.yml`.
+- **Acceptation** : ✅ tests `test_langfuse_tracer.py` (4) ; trace UI = stack + clés Langfuse.
 
 #### T1.4 — Éval en CI (gate sur seuils)
-- **P1 · Tâche · 3 SP · S3 · PE · dépend : T0.0, T1.1, T1.2** · Statut : 🟡 **Volet déterministe livré (2026-06-28)** — gate d'intégrité du golden set (`evaluation/validate_golden_set.py`, cible `make eval-gate`) exécuté en CI via la suite lean (`tests/test_golden_set.py`) : schéma, domaines, intents, `relevant_doc_ids` existants, OOB vide, doublons, tailles mini. **Reste** : gate seuil qualité (Recall@10/nDCG sur retrieval live) → job nightly/CI avec Qdrant + embeddings ; seuils RAGAS (faithfulness ≥ 0.9…) → coût LLM judge à arbitrer.
+- **P1 · Tâche · 3 SP · S3 · PE · dépend : T0.0, T1.1, T1.2** · Statut : ✅ **Gates livrés (2026-06-28)** — intégrité golden set (CI) + seuils retrieval (`validate_retrieval_thresholds.py`, `make eval-retrieval-gate`). **Reste** : job nightly avec stack live ; seuils RAGAS (coût LLM judge).
 - **Pourquoi** : « eval as continuous engineering » — bloquer les régressions au merge.
 - **Étapes** :
   1. Job CI sur un sous-ensemble rapide.
@@ -316,69 +314,66 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 ### EPIC E2 — Qualité retrieval
 
 #### T2.1 — Query rewriting / expansion
-- **P1 · Story · 5 SP · S3 · TL · dépend : T1.2**
+- **P1 · Story · 5 SP · S3 · TL · dépend : T1.2** · Statut : ✅ **Code livré (2026-06-28)** — flag `ENABLE_QUERY_REWRITING=false` par défaut. **Reste** : run `evaluate.py` avec/sans flag pour prouver le delta Recall@10 sur golden set (stack live).
 - **Pourquoi** : étape standard 2026 manquante ; gain de recall sur questions mal formulées.
-- **Étapes** :
-  1. `app/services/retrieval/query_rewriter.py` : `rewrite(query, history) -> list[str]`.
-  2. Retrieval sur variantes + fusion (RRF en place).
-  3. Flag `enable_query_rewriting` ; mesurer Recall@10 avec/sans.
-- **Fichiers** : `app/services/retrieval/query_rewriter.py` (nouveau), `hybrid_search.py`, `config.py`.
-- **Acceptation** : Recall@10 ≥ baseline + delta positif mesuré.
+- **Livré** :
+  1. `app/services/query_rewriter.py` : `rewrite(query, history) -> list[str]` (originale + 1–2 reformulations LLM, dédupliquées).
+  2. `hybrid_search.py` : retrieval sur chaque variante, fusion RRF globale ; param `history` optionnel ; batch `get_embedding_vectors`.
+  3. `config.py` : `enable_query_rewriting`, `query_rewrite_max_variants`.
+  4. Tests : `tests/test_query_rewriter.py` (6), `test_hybrid_search.test_query_rewriting_merges_variants_via_rrf`.
+- **Fichiers** : `app/services/query_rewriter.py`, `hybrid_search.py`, `config.py`.
+- **Acceptation** : ✅ code + tests ; delta Recall@10 mesuré = run evaluate avec stack.
 
 #### T2.2 — HyDE
-- **P2 · Story · 3 SP · S4 · TL · dépend : T2.1**
+- **P2 · Story · 3 SP · S4 · TL · dépend : T2.1** · Statut : ✅ **Code livré (2026-06-28)** — `ENABLE_HYDE=false` par défaut. **Reste** : delta nDCG@10 mesuré sur golden set (stack live).
 - **Pourquoi** : efficace sur questions courtes/abstraites.
-- **Étapes** : `hyde(query) -> str` → embed → vecteur de recherche additionnel ; flag + A/B.
-- **Fichiers** : `app/services/retrieval/hyde.py` (nouveau), `hybrid_search.py`.
-- **Acceptation** : delta nDCG@10 mesuré ; activé seulement si positif.
+- **Livré** : `hyde.py` (`generate_hypothetical_passage`, `get_hyde_embedding_vector`) ; vecteur HyDE fusionné via RRF dans `hybrid_search` ; tests `test_hyde.py` (5).
+- **Fichiers** : `app/services/hyde.py`, `hybrid_search.py`, `config.py`.
+- **Acceptation** : ✅ code + tests ; delta nDCG@10 = run evaluate/tune avec stack.
 
-#### T2.3 — Tuning poids dense/sparse + RRF
-- **P2 · Tâche · 3 SP · S3 · PE · dépend : T1.2**
-- **Pourquoi** : l'optimum est rarement 50/50 ; `rrf_k` 30–60 selon précision top-1 vs recall.
-- **Étapes** : grid-search poids dense 0.2→0.8 (nDCG@10) ; `rrf_k ∈ {30,40,60}` ; figer dans `config.py`.
-- **Fichiers** : `evaluation/tune.py` (nouveau), `config.py`, `hybrid_search.py`.
-- **Acceptation** : valeurs justifiées par nDCG, documentées.
+#### T2.3 — Tuning RRF k
+- **P2 · Tâche · 3 SP · S3 · PE · dépend : T1.2** · Statut : ✅ **Code livré (2026-06-28)** — α déprécié, seul `rrf_k` est tuné.
+- **Pourquoi** : l'optimum de `rrf_k` (30–60) dépend du corpus ; impact top-1 vs recall.
+- **Livré** : `evaluation/tune.py` (grid-search, `tune_report.json`) ; `make tune` ; tests `test_tune.py` (4).
+- **Fichiers** : `evaluation/tune.py`, `Makefile`.
+- **Acceptation** : ✅ script + tests ; valeur gagnante = `make tune` avec stack + corpus ingéré.
 
 #### T2.4 — Metadata filtering avant ANN
-- **P1 · Story · 5 SP · S4 · BE · dépend : —**
+- **P1 · Story · 5 SP · S4 · BE · dépend : —** · Statut : ✅ **Code livré (2026-06-28)**
 - **Pourquoi** : éviter de reranker des chunks hors-scope ; précision + sécurité.
-- **Étapes** : pousser filtres `domain` + droits dans Qdrant (payload filters) et BM25 ; vérifier l'isolation.
-- **Fichiers** : `vector_store.py`, `bm25_search.py`, `hybrid_search.py`, `permissions_service.py`.
-- **Acceptation** : aucun chunk hors-scope dans les candidats ; tests d'isolation verts.
+- **Livré** : `retrieval_filters.py` (`build_retrieval_scope`, permissions via `filter_documents_by_permissions`) ; Qdrant `MatchAny` sur `document_id` ; BM25 filtre **avant** scoring (domain + droits) ; `chat` passe `user_id` → scope ; eval `user_id=None` = pas de filtre permissions.
+- **Fichiers** : `retrieval_filters.py`, `vector_store.py`, `bm25_search.py`, `hybrid_search.py`, `chat.py`, `routers/chat.py`, `rag.py`, `multi_domain_rag.py`.
+- **Acceptation** : ✅ tests `test_retrieval_filters.py` (7) ; isolation live = stack + corpus multi-user.
 
 #### T2.5 — Historique conversationnel dans le RAG
-- **P1 · Story · 5 SP · S4 · TL · dépend : T1.2, T2.1**
-- **Pourquoi** : les tours sont **stockés** (`conversations`/`messages`) mais **jamais réinjectés** : `build_answer(query)` traite chaque message isolément. Les questions de suivi (« et pour X ? », « pourquoi ? ») retrievent mal car la requête perd le contexte. Table-stakes pour un produit *chat* ; ROI élevé / effort faible.
-- **Étapes** :
-  1. Charger les N derniers tours de la conversation (paramètre `history_window`, défaut 4-6).
-  2. **Condense-question** : `rewrite(query, history) -> standalone_query` (réutiliser `query_rewriter` de T2.1) pour le retrieval.
-  3. Passer l'historique tronqué au prompt LLM (`answer_from_context(..., history=...)`), avec budget de tokens.
-  4. Flag `enable_conversation_history` ; mesurer le bucket « follow-up » du golden set (à ajouter en T1.1).
-- **Fichiers** : `app/services/chat.py` (`build_answer`/`build_answer_stream`), `routers/chat.py` (passer `conversation_id`/history), `app/services/llm.py` (prompt), `app/services/retrieval/query_rewriter.py`, `config.py`.
-- **Acceptation** : sur des questions de suivi, Recall@10 et faithfulness ≥ baseline single-turn + delta mesuré ; flag off = comportement actuel inchangé.
+- **P1 · Story · 5 SP · S4 · TL · dépend : T1.2, T2.1** · Statut : ✅ **Code livré (2026-06-28)**
+- **Pourquoi** : questions de suivi retrievent mal sans contexte des tours précédents.
+- **Livré** : `load_conversation_history` (6 tours) ; router charge l'historique **avant** le message courant ; `history` passé au rewriting/hybrid search ; bloc « Historique récent » dans le prompt LLM (`llm.py`).
+- **Fichiers** : `app/services/chat.py`, `routers/chat.py`, `app/services/llm.py`, `hybrid_search.py`.
+- **Acceptation** : ✅ tests `test_conversation_history.py` ; delta follow-up golden set = run evaluate quand stack dispo.
 
 ### EPIC E3 — Agentique (piloté par la mesure)
 
 #### T3.1 — CRAG (corrective retrieval)
-- **P1 · Story · 5 SP · S4 · TL · dépend : T1.3, T2.1**
+- **P1 · Story · 5 SP · S4 · TL · dépend : T1.3, T2.1** · Statut : ✅ **Code livré (2026-06-28)** — `ENABLE_CRAG=false` par défaut. **Reste** : trace Langfuse (T1.3) + delta faithfulness sur golden set.
 - **Pourquoi** : premier pas agentique simple, fort impact faithfulness.
-- **Étapes** : évaluateur léger de pertinence des top chunks → si faible, re-query (rewriting élargi / top_k++) → tracer la décision dans Langfuse.
-- **Fichiers** : `app/services/retrieval/crag.py` (nouveau), `chat.py`.
-- **Acceptation** : faithfulness en hausse sur les questions difficiles, latence maîtrisée (mesurée).
+- **Livré** : `crag.py` — évaluateur léger (overlap lexical + force RRF) ; si verdict incorrect/ambiguous → retry avec `top_k×2` + `expand_queries(force=True)` ; fusion si retry partiel ; branché dans `rag.py` via `enable_crag`.
+- **Fichiers** : `app/services/crag.py`, `rag.py`, `hybrid_search.py` (`queries` override), `query_rewriter.py` (`force`), `config.py`.
+- **Acceptation** : ✅ tests `test_crag.py` (10) ; faithfulness mesurée = run evaluate avec stack.
 
 #### T3.2 — Self-RAG (filtrage par chunk)
-- **P2 · Story · 5 SP · S5 · TL · dépend : T3.1**
+- **P2 · Story · 5 SP · S5 · TL · dépend : T3.1** · Statut : ✅ **Code livré (2026-06-28)** — `ENABLE_SELF_RAG=false` par défaut.
 - **Pourquoi** : réduit le bruit dans le prompt → moins d'hallucination.
-- **Étapes** : prédire IsRel/IsSup/IsUse par chunk top-K ; drop sous seuil ; garder 3–8 chunks.
-- **Fichiers** : `app/services/retrieval/self_rag.py` (nouveau), `build_answer`.
-- **Acceptation** : context precision en hausse, faithfulness ≥ 0.9.
+- **Livré** : `self_rag.py` — score IsRel heuristique (overlap + retrieval) ; drop sous seuil ; garde 3–8 chunks ; metadata `self_rag_relevance` ; branché dans `build_answer`/`build_answer_stream` via `_filter_chunk_results`.
+- **Fichiers** : `app/services/self_rag.py`, `chat.py`, `config.py`.
+- **Acceptation** : ✅ tests `test_self_rag.py` (7) ; context precision mesurée = run evaluate avec stack.
 
 #### T3.3 — Query decomposition multi-hop
-- **P2 · Story · 8 SP · S5 · TL · dépend : T2.1**
+- **P2 · Story · 8 SP · S5 · TL · dépend : T2.1** · Statut : ✅ **Code livré (2026-06-28)** — `ENABLE_QUERY_DECOMPOSITION=false` par défaut.
 - **Pourquoi** : questions composées mal servies par un seul retrieval.
-- **Étapes** : `decompose(query) -> list[subquery]` ; retrieval parallèle + fusion RRF globale + rerank ; prompt adaptatif.
-- **Fichiers** : `app/services/retrieval/decompose.py` (nouveau), `multi_domain_rag.py`, `chat.py`.
-- **Acceptation** : gain mesuré sur le bucket multi-hop.
+- **Livré** : `decompose.py` — heuristiques (`?` multiples, `;`) + fallback LLM ; retrieval parallèle par sous-requête ; fusion RRF globale + rerank ; branché dans `rag.py` (prioritaire sur CRAG si activé).
+- **Fichiers** : `app/services/decompose.py`, `rag.py`, `config.py`.
+- **Acceptation** : ✅ tests `test_decompose.py` (7) ; gain bucket multi-hop = run evaluate avec stack.
 
 #### T3.4 — (Optionnel) GraphRAG
 - **P3 · Spike/Story · 13 SP · backlog · TL · dépend : T3.3**
@@ -532,16 +527,16 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T0.4 | ADR multi-domaines | E0 | 2 | S1 | TL | ✅ |
 | T1.1 | Golden set 100–200 | E1 | 8 | S1-S2 | DA/PE | 🟡 |
 | T1.2 | Éval retrieval vs génération | E1 | 5 | S2 | PE | ✅ |
-| T1.3 | Langfuse | E1 | 5 | S2 | PE | ⬜ |
-| T1.4 | Éval en CI | E1 | 3 | S3 | PE | 🟡 |
-| T2.1 | Query rewriting | E2 | 5 | S3 | TL | ⬜ |
-| T2.2 | HyDE | E2 | 3 | S4 | TL | ⬜ |
-| T2.3 | Tuning poids/RRF | E2 | 3 | S3 | PE | ⬜ |
-| T2.4 | Metadata filtering | E2 | 5 | S4 | BE | ⬜ |
-| T2.5 | Historique conversationnel | E2 | 5 | S4 | TL | ⬜ |
-| T3.1 | CRAG | E3 | 5 | S4 | TL | ⬜ |
-| T3.2 | Self-RAG | E3 | 5 | S5 | TL | ⬜ |
-| T3.3 | Query decomposition | E3 | 8 | S5 | TL | ⬜ |
+| T1.3 | Langfuse | E1 | 5 | S2 | PE | ✅ |
+| T1.4 | Éval en CI | E1 | 3 | S3 | PE | ✅ |
+| T2.1 | Query rewriting | E2 | 5 | S3 | TL | ✅ |
+| T2.2 | HyDE | E2 | 3 | S4 | TL | ✅ |
+| T2.3 | Tuning rrf_k | E2 | 3 | S3 | PE | ✅ |
+| T2.4 | Metadata filtering | E2 | 5 | S4 | BE | ✅ |
+| T2.5 | Historique conversationnel | E2 | 5 | S4 | TL | ✅ |
+| T3.1 | CRAG | E3 | 5 | S4 | TL | ✅ |
+| T3.2 | Self-RAG | E3 | 5 | S5 | TL | ✅ |
+| T3.3 | Query decomposition | E3 | 8 | S5 | TL | ✅ |
 | T3.4 | GraphRAG (opt.) | E3 | 13 | backlog | TL | ⬜ |
 | T4.1 | Refactor packages | E4 | 13 | S6 | BE | ⬜ |
 | T4.2 | PostgreSQL | E4 | 13 | backlog | BE | ⬜ |
@@ -551,4 +546,4 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T5.1 | Extraction tableaux | E5 | 5 | S6 | BE | ⬜ |
 | T5.2 | OCR images | E5 | 8 | backlog | BE | ⬜ |
 
-**Total** : 25 tickets · ~163 SP · dont 5 faits (T0.0–T0.4, Phase 0 complète).
+**Total** : 25 tickets · ~163 SP · **17 tickets code ✅** (E0, E2, E3, T1.2–T1.4, T3.1–T3.3) · T1.1 🟡 (revue DA) · E4/E5 + T3.4 backlog.

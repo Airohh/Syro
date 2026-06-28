@@ -1,0 +1,35 @@
+# Generated / non-source artifacts — keep them out of the knowledge graph
+
+# Coverage HTML reports (57 generated files polluting the corpus)
+htmlcov/
+.coverage
+coverage.xml
+
+# Graphify's own output
+graphify-out/
+.graphify_detect.json
+.graphify_python
+
+# Frontend build / deps
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Python caches & envs
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+
+# Runtime data / stores
+storage/
+*.sqlite
+*.db
+mlruns/
+
+# Misc generated
+*.log
+.DS_Store

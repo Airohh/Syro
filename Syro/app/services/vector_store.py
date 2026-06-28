@@ -12,6 +12,7 @@ from qdrant_client.models import (
     Filter,
     FieldCondition,
     MatchValue,
+    MatchAny,
 )
 
 from ..config import settings
@@ -252,8 +253,12 @@ class VectorStore:
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
         domain: str | None = None,
+        allowed_document_ids: frozenset[int] | None = None,
     ) -> list[dict[str, Any]]:
         try:
+            if allowed_document_ids is not None and not allowed_document_ids:
+                return []
+
             client = self._get_client()
             target_collection = self._get_collection_for_domain(domain) if domain else self.collection_name
             query_filter = Filter(
@@ -264,6 +269,14 @@ class VectorStore:
                     )
                 ]
             )
+
+            if allowed_document_ids is not None:
+                query_filter.must.append(
+                    FieldCondition(
+                        key="document_id",
+                        match=MatchAny(any=sorted(allowed_document_ids)),
+                    )
+                )
             
             if filters:
                 for key, value in filters.items():

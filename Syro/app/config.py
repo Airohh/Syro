@@ -59,6 +59,19 @@ class Settings(BaseSettings):
     rerank_top_k: int = 5
     enable_reranking: bool = True
     rerank_weight: float = 0.7
+    enable_query_rewriting: bool = False  # T2.1 : reformulations avant retrieval
+    query_rewrite_max_variants: int = 2  # reformulations LLM max (hors question originale)
+    enable_hyde: bool = False  # T2.2 : vecteur de recherche depuis passage hypothétique
+    enable_crag: bool = False  # T3.1 : retrieval correctif si pertinence faible
+    crag_retry_threshold: float = 0.25  # score combiné sous ce seuil → retry
+    crag_incorrect_threshold: float = 0.12  # verdict incorrect (retry garanti)
+    crag_retry_top_k_multiplier: int = 2  # top_k de la passe corrective
+    enable_self_rag: bool = False  # T3.2 : filtre IsRel par chunk avant prompt
+    self_rag_min_relevance: float = 0.15  # seuil IsRel heuristique
+    self_rag_min_chunks: int = 3  # minimum conservé même si sous seuil
+    self_rag_max_chunks: int = 8  # maximum injecté dans le prompt
+    enable_query_decomposition: bool = False  # T3.3 : décomposition multi-hop
+    query_decomposition_max_subqueries: int = 3
     ollama_use_gpu: bool = True
     embedding_cache_enabled: bool = True
     embedding_cache_size: int = 1000
@@ -87,6 +100,10 @@ class Settings(BaseSettings):
     metrics_enabled: bool = True
     tracing_enabled: bool = False  # Désactivé par défaut (nécessite OTLP endpoint)
     otlp_endpoint: str | None = None  # Ex: http://localhost:4317
+    langfuse_enabled: bool = False  # T1.3 : tracing RAG par requête
+    langfuse_host: str = "http://localhost:3000"
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
     
     # Sécurité
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

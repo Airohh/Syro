@@ -34,6 +34,13 @@ from .circuit_breaker import CircuitBreaker
 _embedding_cache: OrderedDict[str, np.ndarray] = OrderedDict()
 _cache_max_size = settings.embedding_cache_size if settings.embedding_cache_enabled else 0
 
+
+def _history_block(conversation_history: Sequence[str] | None) -> str:
+    if not conversation_history:
+        return ""
+    return "Historique récent:\n" + "\n".join(conversation_history) + "\n\n"
+
+
 class LLMProvider:
     def __init__(self) -> None:
         self._provider = settings.llm_provider.lower()
@@ -234,7 +241,13 @@ class LLMProvider:
 
         return [v for v in results]  # type: ignore[misc]
 
-    def chat(self, question: str, context_chunks: Sequence[str], domain: str | None = None) -> tuple[str, int]:
+    def chat(
+        self,
+        question: str,
+        context_chunks: Sequence[str],
+        domain: str | None = None,
+        conversation_history: Sequence[str] | None = None,
+    ) -> tuple[str, int]:
         context_block = "\n\n".join(
             f"[Source {i+1}]\n{chunk}" for i, chunk in enumerate(context_chunks)
         )
@@ -242,13 +255,18 @@ class LLMProvider:
         domain_to_use = domain or settings.domain
         domain_config = get_domain_config(domain_to_use)
         system_prompt = domain_config.system_prompt
+
+        history_block = _history_block(conversation_history)
         
         if self._chat_model and HumanMessage and SystemMessage and self._chat_breaker.allow():
             try:
                 messages = [
                     SystemMessage(content=system_prompt),
                     HumanMessage(
-                        content=f"Question: {question}\n\nContexte:\n{context_block if context_block else 'Aucun contexte disponible.'}",
+                        content=(
+                            f"{history_block}Question: {question}\n\n"
+                            f"Contexte:\n{context_block if context_block else 'Aucun contexte disponible.'}"
+                        ),
                     ),
                 ]
                 response = self._chat_model.invoke(messages)
@@ -269,7 +287,13 @@ class LLMProvider:
         usage = len(question.split()) + sum(len(chunk.split()) for chunk in context_chunks)
         return fallback, usage
     
-    def chat_stream(self, question: str, context_chunks: Sequence[str], domain: str | None = None):
+    def chat_stream(
+        self,
+        question: str,
+        context_chunks: Sequence[str],
+        domain: str | None = None,
+        conversation_history: Sequence[str] | None = None,
+    ):
         context_block = "\n\n".join(
             f"[Source {i+1}]\n{chunk}" for i, chunk in enumerate(context_chunks)
         )
@@ -277,13 +301,18 @@ class LLMProvider:
         domain_to_use = domain or settings.domain
         domain_config = get_domain_config(domain_to_use)
         system_prompt = domain_config.system_prompt
+
+        history_block = _history_block(conversation_history)
         
         if self._chat_model and HumanMessage and SystemMessage and self._chat_breaker.allow():
             try:
                 messages = [
                     SystemMessage(content=system_prompt),
                     HumanMessage(
-                        content=f"Question: {question}\n\nContexte:\n{context_block if context_block else 'Aucun contexte disponible.'}",
+                        content=(
+                            f"{history_block}Question: {question}\n\n"
+                            f"Contexte:\n{context_block if context_block else 'Aucun contexte disponible.'}"
+                        ),
                     ),
                 ]
                 # Stream response
@@ -314,9 +343,21 @@ def get_embedding_vectors(texts: Sequence[str]) -> list[np.ndarray]:
     """Embedding par lot (1 appel réseau). Voir `LLMProvider.embed_many`."""
     return provider.embed_many(texts)
 
-def answer_from_context(question: str, context_chunks: Sequence[str], domain: str | None = None) -> tuple[str, int]:
-    return provider.chat(question, context_chunks, domain=domain)
+def answer_from_context(
+    question: str,
+    context_chunks: Sequence[str],
+    domain: str | None = None,
+    conversation_history: Sequence[str] | None = None,
+) -> tuple[str, int]:
+    return provider.chat(question, context_chunks, domain=domain, conversation_history=conversation_history)
 
-def answer_from_context_stream(question: str, context_chunks: Sequence[str], domain: str | None = None):
+def answer_from_context_stream(
+    question: str,
+    context_chunks: Sequence[str],
+    domain: str | None = None,
+    conversation_history: Sequence[str] | None = None,
+):
     """Stream answer from context (generator)."""
-    return provider.chat_stream(question, context_chunks, domain=domain)
+    return provider.chat_stream(
+        question, context_chunks, domain=domain, conversation_history=conversation_history
+    )

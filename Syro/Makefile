@@ -52,6 +52,12 @@ eval: ## Evaluation RAGAS reproductible (necessite OPENAI_API_KEY ou USE_OLLAMA=
 eval-gate: ## Gate d'integrite du golden set (deterministe, sans LLM)
 	python evaluation/validate_golden_set.py
 
+eval-retrieval-gate: ## Gate seuils retrieval sur report.json (apres make eval)
+	python evaluation/validate_retrieval_thresholds.py --skip-missing
+
+tune: ## Grid-search rrf_k sur golden set (stack + corpus requis)
+	python evaluation/tune.py
+
 benchmark: ## Benchmark latence p50/p95/p99 (retrieval vs end-to-end, stack requis)
 	python evaluation/benchmark.py --repeats 5
 
