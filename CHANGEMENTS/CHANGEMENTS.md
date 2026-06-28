@@ -52,7 +52,11 @@ Branche : `fix/chat-500-resilience` · **9 commits, pushés** (`454a2aa..e7d31d6
 - Générateur reproductible `evaluation/build_golden_set.py` (paires curées depuis le corpus, dédup par question, idempotent). `corpus/README.md` documente le schéma + process.
 - Reste : relecture annotateur (R1), annotation des 20 legacy, viser ~150. Débloque T1.2 (métriques retrieval Recall@K/nDCG via `relevant_doc_ids`).
 
-> Prochaine : E1 — T1.2 (éval retrieval vs génération), T1.3 (Langfuse).
+### T1.2 ✅ — éval retrieval vs génération (`feat(eval)`)
+- `evaluation/metrics.py` : métriques de ranking déterministes (Recall@K, Precision@K, nDCG@K, MRR, hit@K) + `oob_refusal_rate` + agrégation par bucket. Sans LLM. Tests : `tests/test_eval_metrics.py` (7).
+- `evaluate.py` : mappe les chunks récupérés → `documents.filename` (via `chunk_id` `{org}_{doc}_{chunk}`), compare aux `relevant_doc_ids`, et écrit `report.json` séparant `retrieval_metrics` (déterministe) et `generation_metrics` (RAGAS). Scores réels = run avec stack.
+
+> Prochaine : E1 — T1.3 (Langfuse), T1.4 (éval CI sur seuils).
 
 ---
 

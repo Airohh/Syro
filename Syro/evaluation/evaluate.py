@@ -33,6 +33,9 @@ sys.path.insert(0, str(SYRO_ROOT))
 from app.services.rag import retrieve_chunks_with_metadata
 from app.services.llm import answer_from_context
 from app.config import settings
+from app.db import db_session
+
+import metrics as retrieval_metrics
 
 # ---------------------------------------------------------------------------
 # Config
@@ -45,18 +48,45 @@ ORGANIZATION_ID = 1  # default org created by init_db.py
 # ---------------------------------------------------------------------------
 # Pipeline runner
 # ---------------------------------------------------------------------------
-def run_pipeline(question: str, domain: str | None = None) -> tuple[str, list[str]]:
-    """Call the Syro RAG pipeline and return (answer, contexts)."""
+def _load_doc_filenames() -> dict[str, str]:
+    """document_id (str) -> filename, pour relier les chunks récupérés aux
+    `relevant_doc_ids` du golden set (qui sont des noms de fichiers)."""
+    with db_session() as conn:
+        rows = conn.execute("SELECT id, filename FROM documents").fetchall()
+    return {str(r["id"]): r["filename"] for r in rows}
+
+
+def _retrieved_doc_ids(results: list[dict], id_to_name: dict[str, str]) -> list[str]:
+    """Noms de fichiers des docs récupérés, ordre préservé, dédupliqués.
+    chunk_id = "{org}_{document_id}_{chunk}" (cf. rag.index_document_content)."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for r in results:
+        parts = str(r.get("chunk_id", "")).split("_")
+        if len(parts) < 3:
+            continue
+        name = id_to_name.get(parts[1])
+        if name and name not in seen:
+            seen.add(name)
+            ordered.append(name)
+    return ordered
+
+
+def run_pipeline(
+    question: str, domain: str | None = None, id_to_name: dict[str, str] | None = None
+) -> tuple[str, list[str], list[str]]:
+    """Call the Syro RAG pipeline and return (answer, contexts, retrieved_doc_ids)."""
     results = retrieve_chunks_with_metadata(
         organization_id=ORGANIZATION_ID,
         query=question,
         domain=domain,
     )
     contexts = [r["text"] for r in results]
+    doc_ids = _retrieved_doc_ids(results, id_to_name or {})
     if not contexts:
-        return "Aucun document indexé trouvé.", []
+        return "Aucun document indexé trouvé.", [], doc_ids
     answer, _ = answer_from_context(question, contexts, domain=domain)
-    return answer, contexts
+    return answer, contexts, doc_ids
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +171,8 @@ def main() -> dict:
 
     samples = []
     pipeline_times = []
+    retrieval_items = []  # pour les métriques de retrieval déterministes (T1.2)
+    id_to_name = _load_doc_filenames()
 
     for i, item in enumerate(dataset_raw):
         question: str = item["question"]
@@ -150,7 +182,7 @@ def main() -> dict:
         print(f"[{i+1:02d}/{len(dataset_raw)}] {question[:70]}...")
 
         t0 = time.perf_counter()
-        answer, contexts = run_pipeline(question, domain=domain)
+        answer, contexts, retrieved_ids = run_pipeline(question, domain=domain, id_to_name=id_to_name)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         pipeline_times.append(elapsed_ms)
 
@@ -162,6 +194,21 @@ def main() -> dict:
             "retrieved_contexts": contexts,
             "reference": ground_truth,
         })
+        retrieval_items.append({
+            "retrieved_ids": retrieved_ids,
+            "relevant_ids": item.get("relevant_doc_ids", []),
+            "intent": item.get("intent", "unlabeled"),
+        })
+
+    # Métriques de retrieval déterministes (sur les paires annotées relevant_doc_ids)
+    retrieval_report = retrieval_metrics.aggregate_retrieval(retrieval_items)
+    print("\n" + "=" * 40)
+    print("Retrieval metrics (deterministic)")
+    print("=" * 40)
+    for key in ("recall@5", "recall@10", "ndcg@10", "mrr", "oob_refusal_rate"):
+        if key in retrieval_report:
+            print(f"  {key:<22} {retrieval_report[key]:.4f}")
+    print(f"  (ranked {retrieval_report['n_ranked']}/{retrieval_report['n_total']})")
 
     print(f"\nAll {len(samples)} questions processed.")
     print(f"Avg pipeline latency: {sum(pipeline_times)/len(pipeline_times):.0f}ms\n")
@@ -187,16 +234,19 @@ def main() -> dict:
     print("=" * 40)
 
     output = {
-        "scores": scores,
+        "generation_metrics": scores,  # RAGAS (LLM judge)
+        "retrieval_metrics": retrieval_report,  # déterministe (T1.2)
+        "scores": scores,  # rétro-compat
         "avg_pipeline_latency_ms": round(sum(pipeline_times) / len(pipeline_times), 1),
         "n_questions": len(samples),
         "per_question": df.to_dict(orient="records"),
     }
 
-    with open(RESULTS_PATH, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
+    for path in (RESULTS_PATH, EVAL_DIR / "report.json"):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
-    print(f"\nResults saved → {RESULTS_PATH}")
+    print(f"\nResults saved → {RESULTS_PATH} and report.json")
     return scores
 
 

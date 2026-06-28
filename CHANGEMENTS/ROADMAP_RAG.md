@@ -4,9 +4,10 @@
 >
 > **Sources** : analyse du graphe graphify (1593 nœuds), lecture du code, doc d'architecture interne, best practices RAG 2026 (Pramana, Ultra-RAG, Onyx, WeKnora, NVIDIA RAG Blueprint).
 >
-> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 Phase 0 (E0) complète (T0.0–T0.4 ✅) · E1 en cours (T1.1 🟡 golden set 100 paires, relecture DA restante)
+> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 Phase 0 (E0) complète · E1 en cours (T1.1 🟡 golden set 100, T1.2 ✅ métriques retrieval) → reste T1.3 (Langfuse), T1.4 (éval CI)
 
 > **Journal de progression**
+> - `2026-06-28` — **T1.2 ✅** : métriques retrieval déterministes (`evaluation/metrics.py` : Recall@K, nDCG, MRR, Precision@K, refus OOB) testées ; `evaluate.py` sépare retrieval/génération dans `report.json`.
 > - `2026-06-28` — **T1.1 🟡** : golden set étendu à 100 paires (4 buckets, `relevant_doc_ids` sur 72), générateur `build_golden_set.py`. Reste relecture DA + annotation des 20 legacy.
 > - `2026-06-28` — **Phase 0 (E0) complète** : T0.0–T0.4 tous ✅.
 > - `2026-06-28` — **T0.4 ✅** : ADR-001 multi-domaines **Accepted** (Option A). Indirection ports retirée (`domainPorts.ts` → source unique `VITE_API_URL`, `tsc` clean).
@@ -282,7 +283,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 - **Acceptation** : ≥ 100 paires, ≥ 4 buckets, `relevant_doc_ids` renseignés.
 
 #### T1.2 — Séparer éval retrieval vs génération
-- **P0 · Story · 5 SP · S2 · PE · dépend : T1.1**
+- **P0 · Story · 5 SP · S2 · PE · dépend : T1.1** · Statut : ✅ **FAIT (2026-06-28)** — `evaluation/metrics.py` (Recall@K, Precision@K, nDCG@K, MRR, hit@K + `oob_refusal_rate`, déterministe) couvert par `tests/test_eval_metrics.py` ; `evaluate.py` mappe chunks→`documents.filename` via `relevant_doc_ids` et écrit `report.json` séparant `retrieval_metrics` (déterministe) et `generation_metrics` (RAGAS). *(Scores réels = run avec stack, comme RAGAS.)*
 - **Pourquoi** : si faithfulness baisse, c'est presque toujours le retrieval ; il faut le distinguer.
 - **Étapes** :
   1. Ajouter `Recall@K`, `nDCG@K`, `Coverage` (retrieval) via `relevant_doc_ids`.
@@ -529,7 +530,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T0.3 | Fusionner ingestion | E0 | 5 | S1 | BE | ✅ |
 | T0.4 | ADR multi-domaines | E0 | 2 | S1 | TL | ✅ |
 | T1.1 | Golden set 100–200 | E1 | 8 | S1-S2 | DA/PE | 🟡 |
-| T1.2 | Éval retrieval vs génération | E1 | 5 | S2 | PE | ⬜ |
+| T1.2 | Éval retrieval vs génération | E1 | 5 | S2 | PE | ✅ |
 | T1.3 | Langfuse | E1 | 5 | S2 | PE | ⬜ |
 | T1.4 | Éval en CI | E1 | 3 | S3 | PE | ⬜ |
 | T2.1 | Query rewriting | E2 | 5 | S3 | TL | ⬜ |
