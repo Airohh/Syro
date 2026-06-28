@@ -31,7 +31,9 @@ ORGANIZATION_ID = 1
 
 
 def main() -> None:
-    files = sorted(CORPUS_DIR.rglob("*.md"))
+    # Only ingest documents inside a domain subdirectory (corpus/<domain>/*.md);
+    # skip top-level files like the corpus README.
+    files = sorted(p for p in CORPUS_DIR.rglob("*.md") if p.parent != CORPUS_DIR)
     if not files:
         print(f"No corpus files found under {CORPUS_DIR}")
         sys.exit(1)

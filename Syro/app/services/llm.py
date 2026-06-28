@@ -88,6 +88,11 @@ class LLMProvider:
                 base_url=base_url,
                 timeout=settings.embedding_timeout,
                 max_retries=settings.llm_max_retries,
+                # Ollama's OpenAI-compat /v1/embeddings rejects the tiktoken
+                # token-id arrays langchain sends by default ("invalid input
+                # type" 400). Force raw-string input so batch embed_documents()
+                # works against Ollama.
+                check_embedding_ctx_length=False,
             )
             self._chat_model = ChatOpenAI(
                 model=settings.chat_model,
