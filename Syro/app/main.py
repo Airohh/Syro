@@ -17,6 +17,19 @@ from .middleware import (
 )
 from .security import SecurityHeadersMiddleware
 
+
+def resolve_cors_settings(raw_origins: str, requested_credentials: bool) -> tuple[list[str], bool]:
+    """Parse les origines CORS et neutralise la combinaison invalide wildcard+credentials.
+
+    Wildcard "*" + credentials est rejeté par les navigateurs (toute requête
+    credentialed échoue). Si une origine wildcard est présente, on force
+    allow_credentials=False pour que le wildcard fonctionne réellement.
+    """
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    allow_credentials = requested_credentials and "*" not in origins
+    return origins, allow_credentials
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Refus de démarrer en prod (debug=False) avec le secret par défaut.
@@ -59,11 +72,9 @@ if settings.enable_security_headers:
     app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS middleware (configurable) : liste séparée par virgules, ou "*"
-cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
-# Wildcard "*" + credentials est invalide côté navigateur (toute requête
-# credentialed est rejetée). Si une origine wildcard est présente, on force
-# allow_credentials=False pour que le wildcard fonctionne réellement.
-cors_allow_credentials = settings.cors_allow_credentials and "*" not in cors_origins
+cors_origins, cors_allow_credentials = resolve_cors_settings(
+    settings.cors_allow_origins, settings.cors_allow_credentials
+)
 if settings.cors_allow_credentials and not cors_allow_credentials:
     logging.getLogger(__name__).warning(
         "CORS: origine wildcard '*' detectee -> allow_credentials force a False "
