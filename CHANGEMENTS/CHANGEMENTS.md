@@ -38,7 +38,14 @@ Branche : `fix/chat-500-resilience` · **9 commits, pushés** (`454a2aa..e7d31d6
 ### Git
 - Historique réécrit (les 3 commits de session avaient avalé les suppressions déjà staged) → 4 commits propres + chirurgie : `refactor` dé-scope / `fix(chat)` / `fix(eval)` / `docs`. Rien n'était pushé → sûr.
 
-> Restant Phase 0 : **T0.3** (fusion ingestion dupliquée), **T0.4** (ADR multi-domaines, reco Option A).
+### T0.3 ✅ — fusion ingestion dupliquée (`refactor(ingestion)`)
+- `app/services/ingestion.py` : nouveaux `run_ingestion()` (extract → métadonnées → index, lève en cas d'échec) et `infer_metadata()` (type/difficulté). `worker/tasks.py` (garde processing/complete/failed + metrics + retry) et `process_document` (BackgroundTasks) délèguent → ~80 lignes dupliquées supprimées. Edge `doc_row` manquant unifié sur `raise`. Tests : `tests/test_ingestion_pipeline.py`.
+
+### T0.4 ✅ — ADR-001 multi-domaines Accepted (`docs(adr)` + `refactor(frontend)`)
+- ADR-001 statut **Accepted** (Option A : mono-API + filtres Qdrant par domaine ; le code y était déjà de facto).
+- `frontend/src/utils/domainPorts.ts` réduit à une source unique pilotée par `VITE_API_URL` ; constante morte `DOMAIN_PORTS` supprimée ; signatures conservées (aucun call-site cassé), `tsc --noEmit` clean.
+
+> **Phase 0 (E0) complète** : T0.0–T0.4 tous ✅. Prochaine : E1 socle de mesure (T1.1 golden set 100–200).
 
 ---
 

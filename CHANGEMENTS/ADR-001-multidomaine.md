@@ -1,6 +1,6 @@
 # ADR-001 — Modèle multi-domaines
 
-- **Statut** : Proposed (à valider par TL) — *ticket T0.4*
+- **Statut** : Accepted (2026-06-28) — *ticket T0.4*
 - **Date** : 2026-06-28
 - **Décideurs** : TL · **Consultés** : BE, FE
 - **Lié** : `ROADMAP_RAG.md` (E4), `docs/architecture.md`
@@ -34,8 +34,10 @@ Adopter **Option A — multi-domaines mono-API** comme modèle officiel et uniqu
 - Déploiement simple (un service), aligné sur `infra/docker-compose.yml`.
 - Débloque les tickets E4 (durcissement) qui supposaient un modèle tranché.
 
-**À faire (suivi, hors ce ADR)**
-- Sortir `domainPorts.ts` du chemin critique : remplacer `getDomainApiUrl`/`getDomainPort` par une base URL unique + passage du domaine en route/header ; garder un shim seulement si un mode multi-port optionnel est conservé.
+**Fait (2026-06-28)**
+- `domainPorts.ts` réduit à une **source unique** : `getDomainApiUrl`/`getDomainPort` renvoient une base URL pilotée par `VITE_API_URL` (défaut `http://127.0.0.1:8000`), constante `DOMAIN_PORTS` (morte) supprimée. Signatures conservées → aucun call-site cassé, `tsc --noEmit` clean.
+
+**À faire (suivi)**
 - Vérifier que tout appel frontend passe par les routes `/domains/{domain}/...` ou envoie le header de domaine.
 - Documenter le header `X-Domain` si retenu en complément des routes.
 

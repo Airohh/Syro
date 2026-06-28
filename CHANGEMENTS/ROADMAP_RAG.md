@@ -4,10 +4,12 @@
 >
 > **Sources** : analyse du graphe graphify (1593 nœuds), lecture du code, doc d'architecture interne, best practices RAG 2026 (Pramana, Ultra-RAG, Onyx, WeKnora, NVIDIA RAG Blueprint).
 >
-> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟡 Phase 0 en cours (T0.0 ✅, T0.1 ✅, T0.2 ✅)
+> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 Phase 0 (E0) complète (T0.0–T0.4 ✅) → prochaine : E1 socle de mesure (T1.1)
 
 > **Journal de progression**
-> - `2026-06-28` — **T0.4 🟡** : ADR-001 multi-domaines rédigé (statut Proposed). Constat : code déjà de facto en Option A (mono-API, routes `/domains/{domain}/`). Attente validation TL + retrait indirection ports.
+> - `2026-06-28` — **Phase 0 (E0) complète** : T0.0–T0.4 tous ✅.
+> - `2026-06-28` — **T0.4 ✅** : ADR-001 multi-domaines **Accepted** (Option A). Indirection ports retirée (`domainPorts.ts` → source unique `VITE_API_URL`, `tsc` clean).
+> - `2026-06-28` — **T0.3 ✅** : ingestion dédupliquée → `run_ingestion()` + `infer_metadata()` partagés dans `app/services/ingestion.py` ; `worker/tasks.py` et `process_document` délèguent (~80 lignes dupliquées supprimées). Couvert par `tests/test_ingestion_pipeline.py`.
 > - `2026-06-28` — **T0.2 ✅ terminé** : bug 500 chat clôturé par non-régression (embedding KO + Qdrant KO → BM25-only ; domain endpoint panne aval → 500 sans fuite + rollback). Diagnostic déjà marqué résolu.
 > - `2026-06-28` — **T0.0 ✅ terminé** : suite lean reconstruite (25 tests verts) — `conftest` (gardes GPU/HF offline + stub FlagEmbedding), non-régression RRF + fallback BM25, résilience chat (domain endpoint, pas de fuite/rollback), idempotence ingestion corpus, extraction texte, garde-fous secret prod + CORS wildcard. `pytest*` remis en deps, job CI `test` bloquant, cibles `make test`/`test-cov`. Helper `resolve_cors_settings` extrait pour testabilité.
 > - `2026-06-28` — **T0.1 ✅ terminé** : `storage/mlruns/`, `__pycache__/`, `*.pyc`, `.pytest_cache/` supprimés ; `htmlcov/` déjà ignoré ; logo doublon supprimé ; copie OneDrive redondante supprimée.
@@ -69,8 +71,8 @@ S'y ajoute une **dette technique ciblée** : duplication ingestion (worker vs se
 | Tracing RAG | 🔴 | MLflow (model tracking) ≠ trace chunk/score/prompt par requête (Langfuse). |
 | Ingestion multimodale | 🔴 | Texte seul. `_extract_docx` ignore tableaux/images. |
 | Structure code | 🟡 | `app/services/` plat (22 fichiers), 247 micro-communautés = couplage transversal. |
-| Duplication ingestion | 🟡 | `worker/tasks.py` ≈ `ingestion.process_document()` (~130 lignes dupliquées). |
-| Modèle multi-domaines | 🟡 | Multi-instances (ports) **et** multi-domaines (1 API) coexistent sans décision claire. |
+| Duplication ingestion | 🟢 | Résolu (T0.3) : `run_ingestion()` + `infer_metadata()` partagés ; worker et BackgroundTasks délèguent. |
+| Modèle multi-domaines | 🟢 | Tranché (T0.4, ADR-001 Accepted) : Option A mono-API ; indirection ports retirée. |
 | Couche données | 🟡 | SQLite (OK dev) ; fichiers en disque local ; désync possible SQLite↔Qdrant. |
 | Hygiène repo | 🟢 | Nettoyé (2026-06-28) : `mlruns/`, `__pycache__/`, `*.pyc`, `.pytest_cache/` supprimés ; `htmlcov/` ignoré ; copie OneDrive redondante supprimée. |
 | Bug 500 chat (historique) | 🟢 | Déjà mitigé : embedding KO → dégradation BM25-only (`hybrid_search.py`). À clôturer formellement. |
@@ -246,7 +248,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 - **Acceptation** : tests verts avec Qdrant/embedding simulés KO ; aucun 500.
 
 #### T0.3 — Fusionner l'ingestion dupliquée
-- **P1 · Story · 5 SP · S1 · BE · dépend : T0.0**
+- **P1 · Story · 5 SP · S1 · BE · dépend : T0.0** · Statut : ✅ **FAIT (2026-06-28)** — `run_ingestion()` + `infer_metadata()` centralisés dans `app/services/ingestion.py` ; `worker/tasks.py` (metrics/retry) et `process_document` (BackgroundTasks) délèguent. ~80 lignes dupliquées supprimées, edge `doc_row` manquant unifié (raise). Tests : `test_ingestion_pipeline.py`.
 - **Pourquoi** : `worker/tasks.py` et `ingestion.process_document` partagent la même séquence (`extract_text_from_bytes` + `index_document_content`, vérifié L65/124 vs L77/133) → risque de drift.
 - **Étapes** :
   1. Créer `app/services/ingestion/pipeline.py` avec `run_ingestion(document_id, org_id, storage_path, mime, domain)` (extraction → métadonnées → `index_document_content` → maj statut).
@@ -257,7 +259,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 - **Acceptation** : tests ingestion/worker lean verts sans duplication ; `run_ingestion` couvert par un test.
 
 #### T0.4 — Trancher le modèle multi-domaines (ADR)
-- **P1 · Décision · 2 SP · S1 · TL · dépend : —** · Statut : 🟡 **ADR rédigé (Proposed), en attente validation TL** — `CHANGEMENTS/ADR-001-multidomaine.md`. Constat : le code est déjà de facto en Option A (`domainPorts.ts` renvoie 8000 partout, routes `/domains/{domain}/...`) ; reste à valider + retirer l'indirection ports vestigiale.
+- **P1 · Décision · 2 SP · S1 · TL · dépend : —** · Statut : ✅ **FAIT (2026-06-28)** — ADR-001 **Accepted** (Option A : mono-API + filtres Qdrant par domaine). Indirection ports retirée : `domainPorts.ts` réduit à une source unique pilotée par `VITE_API_URL` (`tsc` clean).
 - **Pourquoi** : Docker = 1 API (`DOMAIN=general`), frontend = N ports (`domainPorts.ts`) ; incohérence produit.
 - **Étapes** :
   1. Rédiger `CHANGEMENTS/ADR-001-multidomaine.md` (contexte, options, décision, conséquences).
@@ -523,8 +525,8 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T0.0 | Suite de tests lean | E0 | 5 | S1 | BE | ✅ |
 | T0.1 | Assainir le repo | E0 | 1 | S1 | PE | ✅ |
 | T0.2 | Clôturer bug 500 chat | E0 | 3 | S1 | BE | ✅ |
-| T0.3 | Fusionner ingestion | E0 | 5 | S1 | BE | ⬜ |
-| T0.4 | ADR multi-domaines | E0 | 2 | S1 | TL | 🟡 |
+| T0.3 | Fusionner ingestion | E0 | 5 | S1 | BE | ✅ |
+| T0.4 | ADR multi-domaines | E0 | 2 | S1 | TL | ✅ |
 | T1.1 | Golden set 100–200 | E1 | 8 | S1-S2 | DA/PE | ⬜ |
 | T1.2 | Éval retrieval vs génération | E1 | 5 | S2 | PE | ⬜ |
 | T1.3 | Langfuse | E1 | 5 | S2 | PE | ⬜ |
@@ -546,4 +548,4 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T5.1 | Extraction tableaux | E5 | 5 | S6 | BE | ⬜ |
 | T5.2 | OCR images | E5 | 8 | backlog | BE | ⬜ |
 
-**Total** : 25 tickets · ~163 SP · dont 3 faits (T0.0, T0.1, T0.2).
+**Total** : 25 tickets · ~163 SP · dont 5 faits (T0.0–T0.4, Phase 0 complète).
