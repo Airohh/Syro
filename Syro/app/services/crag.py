@@ -13,11 +13,11 @@ from typing import Any
 from ..config import settings
 from .hybrid_search import hybrid_search
 from .query_rewriter import expand_queries
+from .retrieval_scoring import normalize_rrf_score
 
 logger = logging.getLogger(__name__)
 
 _TERM_RE = re.compile(r"\b\w+\b", re.UNICODE)
-_RRF_STRONG_SCORE = 0.05
 
 
 def _query_terms(query: str) -> set[str]:
@@ -39,7 +39,7 @@ def top_retrieval_strength(chunks: list[dict[str, Any]]) -> float:
     """Normalise le score RRF du meilleur chunk (0–1)."""
     if not chunks:
         return 0.0
-    return min(float(chunks[0].get("score", 0.0)) / _RRF_STRONG_SCORE, 1.0)
+    return normalize_rrf_score(chunks[0].get("score", 0.0))
 
 
 def assess_retrieval_quality(

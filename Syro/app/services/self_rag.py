@@ -11,16 +11,15 @@ from typing import Any
 
 from ..config import settings
 from .crag import lexical_overlap
+from .retrieval_scoring import normalize_rrf_score
 
 logger = logging.getLogger(__name__)
-
-_RRF_STRONG_SCORE = 0.05
 
 
 def chunk_relevance_score(query: str, chunk: dict[str, Any]) -> float:
     """Proxy IsRel [0–1] : overlap question↔chunk + score retrieval normalisé."""
     overlap = lexical_overlap(query, [chunk["text"]])
-    strength = min(float(chunk.get("score", 0.0)) / _RRF_STRONG_SCORE, 1.0)
+    strength = normalize_rrf_score(chunk.get("score", 0.0))
     return 0.6 * overlap + 0.4 * strength
 
 

@@ -190,7 +190,7 @@ def hybrid_search(
                 entry = {
                     "chunk_id": result["chunk_id"],
                     "text": result["text"],
-                    "metadata": result["metadata"],
+                    "metadata": dict(result.get("metadata") or {}),
                     "rrf_score": 0.0,
                     "vector_score": 0.0,
                     "bm25_score": 0.0,
