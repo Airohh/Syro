@@ -124,6 +124,36 @@ class TestRRFFusion:
         assert set(ids) == {"A", "B", "C"}
 
 
+class TestEmbeddingReuse:
+    @patch("app.services.hybrid_search.bm25_search")
+    @patch("app.services.hybrid_search.VectorStore")
+    @patch("app.services.hybrid_search.get_embedding_vector")
+    @patch("app.services.hybrid_search.settings")
+    def test_reuses_provided_query_embedding(
+        self, mock_settings, mock_embed, mock_vs_class, mock_bm25
+    ):
+        mock_settings.retrieval_top_k = 10
+        mock_settings.rrf_k = 60
+        mock_settings.enable_reranking = False
+        mock_settings.enable_hyde = False
+        mock_settings.enable_query_rewriting = False
+
+        mock_embed.side_effect = AssertionError("must not re-embed original query")
+        mock_vs = Mock()
+        mock_vs_class.return_value = mock_vs
+        mock_vs.search.return_value = [_vec("1", "a", 0.5)]
+        mock_bm25.search.return_value = [_vec("1", "a", 0.5)]
+
+        precomputed = np.array([0.1] * 8)
+        hybrid_search(
+            organization_id=1,
+            query="hello world",
+            top_k=5,
+            query_embedding=precomputed,
+        )
+        mock_embed.assert_not_called()
+
+
 # Import après les helpers pour garder le module léger au collect.
 from app.services.hybrid_search import hybrid_search  # noqa: E402
 from app.services.vector_store import VectorStoreError  # noqa: E402

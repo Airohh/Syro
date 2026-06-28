@@ -154,6 +154,7 @@ def retrieve_decomposed(
     domain: str | None = None,
     history: list[str] | None = None,
     allowed_document_ids: frozenset[int] | None = None,
+    query_embedding: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieval multi-hop : sous-requêtes parallèles + fusion RRF + rerank."""
     if top_k is None:
@@ -172,6 +173,7 @@ def retrieve_decomposed(
                 domain=domain,
                 history=history,
                 allowed_document_ids=allowed_document_ids,
+                query_embedding=query_embedding,
             )
         return hybrid_search(
             organization_id=organization_id,
@@ -181,12 +183,14 @@ def retrieve_decomposed(
             domain=domain,
             history=history,
             allowed_document_ids=allowed_document_ids,
+            query_embedding=query_embedding,
         )
 
     per_sub_k = min(settings.retrieval_top_k, max(top_k, 5))
     logger.info("Query decomposition: %d subqueries for %r", len(subqueries), query[:80])
 
     def _search_one(subquery: str) -> list[dict[str, Any]]:
+        sub_embedding = query_embedding if subquery == query else None
         if settings.enable_crag:
             from .crag import retrieve_with_crag
 
@@ -198,6 +202,7 @@ def retrieve_decomposed(
                 domain=domain,
                 history=history,
                 allowed_document_ids=allowed_document_ids,
+                query_embedding=sub_embedding,
             )
         return hybrid_search(
             organization_id=organization_id,
@@ -207,6 +212,7 @@ def retrieve_decomposed(
             domain=domain,
             history=history,
             allowed_document_ids=allowed_document_ids,
+            query_embedding=sub_embedding,
         )
 
     with ThreadPoolExecutor(max_workers=min(4, len(subqueries))) as executor:

@@ -153,6 +153,7 @@ def retrieve_chunks_with_metadata(
                 domain=domain,
                 allowed_document_ids=allowed_document_ids,
                 history=history,
+                query_embedding=query_embedding,
             )
         elif settings.enable_crag:
             from .crag import retrieve_with_crag
@@ -165,6 +166,7 @@ def retrieve_chunks_with_metadata(
                 domain=domain,
                 allowed_document_ids=allowed_document_ids,
                 history=history,
+                query_embedding=query_embedding,
             )
         else:
             results = hybrid_search(
@@ -175,6 +177,7 @@ def retrieve_chunks_with_metadata(
                 domain=domain,
                 allowed_document_ids=allowed_document_ids,
                 history=history,
+                query_embedding=query_embedding,
             )
 
         if query_embedding is not None and results:

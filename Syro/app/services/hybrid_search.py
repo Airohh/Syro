@@ -60,6 +60,29 @@ def _bm25_search_sync(
         domain=domain,
     )
 
+def _build_query_vectors(
+    queries: list[str],
+    original_query: str,
+    query_embedding: np.ndarray | None = None,
+) -> dict[str, np.ndarray]:
+    """Embeddings par variante ; réutilise query_embedding pour la requête d'origine."""
+    vectors: dict[str, np.ndarray] = {}
+    pending: list[str] = []
+    for q in queries:
+        if query_embedding is not None and q == original_query:
+            vectors[q] = query_embedding
+        else:
+            pending.append(q)
+    if not pending:
+        return vectors
+    if len(pending) == 1:
+        vectors[pending[0]] = get_embedding_vector(pending[0])
+    else:
+        for q, vec in zip(pending, get_embedding_vectors(pending)):
+            vectors[q] = vec
+    return vectors
+
+
 def hybrid_search(
     organization_id: int,
     query: str,
@@ -70,6 +93,7 @@ def hybrid_search(
     history: list[str] | None = None,
     allowed_document_ids: frozenset[int] | None = None,
     queries: list[str] | None = None,
+    query_embedding: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
     if top_k is None:
         top_k = settings.retrieval_top_k
@@ -82,11 +106,7 @@ def hybrid_search(
     # Embeddings : batch si plusieurs variantes (T2.1 query rewriting).
     query_vectors: dict[str, np.ndarray] = {}
     try:
-        if len(queries) == 1:
-            query_vectors[queries[0]] = get_embedding_vector(queries[0])
-        else:
-            for q, vec in zip(queries, get_embedding_vectors(queries)):
-                query_vectors[q] = vec
+        query_vectors = _build_query_vectors(queries, query, query_embedding)
     except Exception as e:
         logger.warning("Embedding failed, degrading to BM25-only search: %s", e)
 

@@ -97,6 +97,7 @@ def retrieve_with_crag(
     domain: str | None = None,
     history: list[str] | None = None,
     allowed_document_ids: frozenset[int] | None = None,
+    query_embedding: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieval hybride avec passe corrective optionnelle si pertinence faible."""
     if top_k is None:
@@ -110,6 +111,7 @@ def retrieve_with_crag(
         domain=domain,
         history=history,
         allowed_document_ids=allowed_document_ids,
+        query_embedding=query_embedding,
     )
     assessment = assess_retrieval_quality(query, results)
 
