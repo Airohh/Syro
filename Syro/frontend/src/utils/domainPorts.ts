@@ -1,22 +1,19 @@
-// Mapping des domaines vers les ports de l'API
-// NOTE: Tous les domaines utilisent maintenant le même backend (port 8000)
-// avec des routes multi-domaines : /domains/{domain}/...
-export const DOMAIN_PORTS: Record<string, number> = {
-  tech: 8000,
-  medical: 8000,  // Même backend, route /domains/medical/...
-  legal: 8000,    // Même backend, route /domains/legal/...
-  finance: 8000,  // Même backend, route /domains/finance/...
-  education: 8000, // Même backend, route /domains/education/...
-  general: 8000,
-};
+/// <reference types="vite/client" />
+// Source unique de l'URL backend (ADR-001 : multi-domaines = 1 API).
+// Le domaine n'est plus porté par un port mais par la route /domains/{domain}/...
+// Les fonctions gardent leur signature historique pour compat des appelants.
+const API_BASE_URL: string =
+  import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-export function getDomainPort(_domainId: string): number {
-  // Tous les domaines utilisent le port 8000 maintenant
-  // Le paramètre _domainId est conservé pour la compatibilité avec le code existant
-  return 8000;
+function _port(): number {
+  const p = new URL(API_BASE_URL).port;
+  return p ? Number(p) : 8000;
 }
 
-export function getDomainApiUrl(_domainId: string): string {
-  return `http://127.0.0.1:8000`;
+export function getDomainPort(_domainId?: string): number {
+  return _port();
 }
 
+export function getDomainApiUrl(_domainId?: string): string {
+  return API_BASE_URL;
+}
