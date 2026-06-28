@@ -4,9 +4,10 @@
 >
 > **Sources** : analyse du graphe graphify (1593 nœuds), lecture du code, doc d'architecture interne, best practices RAG 2026 (Pramana, Ultra-RAG, Onyx, WeKnora, NVIDIA RAG Blueprint).
 >
-> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟡 Phase 0 en cours (T0.0 ✅, T0.1 ✅)
+> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟡 Phase 0 en cours (T0.0 ✅, T0.1 ✅, T0.2 ✅)
 
 > **Journal de progression**
+> - `2026-06-28` — **T0.2 ✅ terminé** : bug 500 chat clôturé par non-régression (embedding KO + Qdrant KO → BM25-only ; domain endpoint panne aval → 500 sans fuite + rollback). Diagnostic déjà marqué résolu.
 > - `2026-06-28` — **T0.0 ✅ terminé** : suite lean reconstruite (25 tests verts) — `conftest` (gardes GPU/HF offline + stub FlagEmbedding), non-régression RRF + fallback BM25, résilience chat (domain endpoint, pas de fuite/rollback), idempotence ingestion corpus, extraction texte, garde-fous secret prod + CORS wildcard. `pytest*` remis en deps, job CI `test` bloquant, cibles `make test`/`test-cov`. Helper `resolve_cors_settings` extrait pour testabilité.
 > - `2026-06-28` — **T0.1 ✅ terminé** : `storage/mlruns/`, `__pycache__/`, `*.pyc`, `.pytest_cache/` supprimés ; `htmlcov/` déjà ignoré ; logo doublon supprimé ; copie OneDrive redondante supprimée.
 > - `2026-06-28` — **Décision** : suite de tests historique supprimée volontairement → reconstruction **lean** actée (nouveau ticket **T0.0**) ; DoD et T0.2/T0.3/T1.4 réalignés en conséquence.
@@ -234,7 +235,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 - **Acceptation** : ✅ `git status` ne liste plus d'artefacts ; `graphify` ne les voit plus.
 
 #### T0.2 — Clôturer le bug 500 chat (non-régression)
-- **P1 · Tâche · 3 SP · S1 · BE · dépend : T0.0**
+- **P1 · Tâche · 3 SP · S1 · BE · dépend : T0.0** · Statut : ✅ **FAIT (2026-06-28)** — tests : embedding KO → BM25-only, Qdrant KO (`VectorStoreError`) → BM25-only, domain endpoint panne aval → 500 sans fuite + rollback. Diagnostic marqué résolu (`docs/diagnostic-chat-500.md`).
 - **Pourquoi** : le code dégrade déjà en BM25-only (`hybrid_search.py`) avec handler `VectorStoreError`→503 (`main.py`) ; il manque le test qui fige ce comportement.
 - **Étapes** :
   1. Test : Qdrant indisponible → `/chat/message` renvoie une réponse BM25-only, pas 500.
@@ -520,7 +521,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 |----|-------|------|----|--------|-------|--------|
 | T0.0 | Suite de tests lean | E0 | 5 | S1 | BE | ✅ |
 | T0.1 | Assainir le repo | E0 | 1 | S1 | PE | ✅ |
-| T0.2 | Clôturer bug 500 chat | E0 | 3 | S1 | BE | ⬜ |
+| T0.2 | Clôturer bug 500 chat | E0 | 3 | S1 | BE | ✅ |
 | T0.3 | Fusionner ingestion | E0 | 5 | S1 | BE | ⬜ |
 | T0.4 | ADR multi-domaines | E0 | 2 | S1 | TL | ⬜ |
 | T1.1 | Golden set 100–200 | E1 | 8 | S1-S2 | DA/PE | ⬜ |
@@ -544,4 +545,4 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T5.1 | Extraction tableaux | E5 | 5 | S6 | BE | ⬜ |
 | T5.2 | OCR images | E5 | 8 | backlog | BE | ⬜ |
 
-**Total** : 25 tickets · ~163 SP · dont 2 faits (T0.0, T0.1).
+**Total** : 25 tickets · ~163 SP · dont 3 faits (T0.0, T0.1, T0.2).

@@ -57,6 +57,30 @@ class TestRRFFusion:
         assert [r["chunk_id"] for r in results] == ["C"]
         mock_vs_class.assert_not_called()  # aucune recherche vectorielle tentée
 
+    @patch("app.services.hybrid_search.bm25_search")
+    @patch("app.services.hybrid_search.VectorStore")
+    @patch("app.services.hybrid_search.get_embedding_vector")
+    @patch("app.services.hybrid_search.settings")
+    def test_qdrant_down_degrades_to_bm25_only(
+        self, mock_settings, mock_embed, mock_vs_class, mock_bm25
+    ):
+        """Qdrant KO (VectorStoreError) ne doit pas lever : le chemin vectoriel
+        est neutralisé, on sert BM25 seul (clôture du bug 500 chat, T0.2)."""
+        mock_settings.retrieval_top_k = 10
+        mock_settings.rrf_k = 60
+        mock_settings.enable_reranking = False
+
+        mock_embed.return_value = np.array([0.1] * 8)
+        mock_vs = Mock()
+        mock_vs_class.return_value = mock_vs
+        mock_vs.search.side_effect = VectorStoreError("qdrant unreachable")
+        mock_bm25.search.return_value = [_vec("C", "c", 0.5)]
+
+        results = hybrid_search(organization_id=1, query="q", top_k=10)
+
+        assert [r["chunk_id"] for r in results] == ["C"]
+
 
 # Import après les helpers pour garder le module léger au collect.
 from app.services.hybrid_search import hybrid_search  # noqa: E402
+from app.services.vector_store import VectorStoreError  # noqa: E402
