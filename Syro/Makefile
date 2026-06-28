@@ -1,6 +1,6 @@
 # Makefile pour Syro - Commandes courantes
 
-.PHONY: help up down logs build clean lint format release
+.PHONY: help up down logs build clean test test-cov lint format release
 
 help: ## Afficher cette aide
 	@echo "Commandes disponibles:"
@@ -36,6 +36,12 @@ build-frontend: ## Rebuild uniquement l'image frontend
 clean: ## Nettoyer volumes et images (ATTENTION: supprime les données)
 	docker compose -f infra/docker-compose.yml down -v
 	docker rmi syro-api syro-frontend 2>/dev/null || true
+
+test: ## Lancer la suite lean (smoke + non-régression)
+	pytest
+
+test-cov: ## Suite lean avec coverage
+	pytest --cov=app --cov=worker --cov-report=term-missing
 
 smoke: ## Smoke test post-deploiement (API + Qdrant + Redis + MLflow)
 	python scripts/smoke_test.py
