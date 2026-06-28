@@ -4,9 +4,10 @@
 >
 > **Sources** : analyse du graphe graphify (1593 nœuds), lecture du code, doc d'architecture interne, best practices RAG 2026 (Pramana, Ultra-RAG, Onyx, WeKnora, NVIDIA RAG Blueprint).
 >
-> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟡 Phase 0 en cours (T0.1 ✅)
+> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟡 Phase 0 en cours (T0.0 ✅, T0.1 ✅)
 
 > **Journal de progression**
+> - `2026-06-28` — **T0.0 ✅ terminé** : suite lean reconstruite (25 tests verts) — `conftest` (gardes GPU/HF offline + stub FlagEmbedding), non-régression RRF + fallback BM25, résilience chat (domain endpoint, pas de fuite/rollback), idempotence ingestion corpus, extraction texte, garde-fous secret prod + CORS wildcard. `pytest*` remis en deps, job CI `test` bloquant, cibles `make test`/`test-cov`. Helper `resolve_cors_settings` extrait pour testabilité.
 > - `2026-06-28` — **T0.1 ✅ terminé** : `storage/mlruns/`, `__pycache__/`, `*.pyc`, `.pytest_cache/` supprimés ; `htmlcov/` déjà ignoré ; logo doublon supprimé ; copie OneDrive redondante supprimée.
 > - `2026-06-28` — **Décision** : suite de tests historique supprimée volontairement → reconstruction **lean** actée (nouveau ticket **T0.0**) ; DoD et T0.2/T0.3/T1.4 réalignés en conséquence.
 
@@ -62,7 +63,7 @@ S'y ajoute une **dette technique ciblée** : duplication ingestion (worker vs se
 | Query understanding | 🔴 | Question brute envoyée au retrieval. Pas de rewriting/HyDE/expansion. |
 | Historique conversationnel | 🟡 | Tours stockés (`conversations`/`messages`) mais **jamais réinjectés** dans `build_answer`/prompt → questions de suivi mal servies (T2.5). |
 | Agentic / corrective | 🔴 | Pipeline linéaire. `agent.py` existe mais = **wrapper persona** (nom + personnalité sur `retrieve→answer`), pas d'orchestration. Pas de CRAG/Self-RAG/GraphRAG/self-critique. |
-| Tests | 🔴 | Suite historique (~32 fichiers) **supprimée volontairement** ; CI réduite à lint. Reconstruction lean prévue (T0.0). |
+| Tests | 🟡 | Suite historique supprimée ; **suite lean en place** (T0.0 ✅, 25 tests, job CI bloquant) couvrant RRF/BM25/résilience chat/ingestion/extraction/secrets-CORS. Reste à étoffer au fil des features. |
 | Tracing RAG | 🔴 | MLflow (model tracking) ≠ trace chunk/score/prompt par requête (Langfuse). |
 | Ingestion multimodale | 🔴 | Texte seul. `_extract_docx` ignore tableaux/images. |
 | Structure code | 🟡 | `app/services/` plat (22 fichiers), 247 micro-communautés = couplage transversal. |
@@ -209,7 +210,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 ### EPIC E0 — Stabiliser & assainir
 
 #### T0.0 — Reconstruire une suite de tests lean
-- **P0 · Story · 5 SP · S1 · BE · dépend : —** · Statut : ⬜
+- **P0 · Story · 5 SP · S1 · BE · dépend : —** · Statut : ✅ **FAIT (2026-06-28)** — 25 tests verts ; couvre RRF, fallback BM25, résilience chat (domain endpoint + pas de fuite/rollback), idempotence ingestion, extraction, secret prod + CORS wildcard. `pytest*` deps, job CI `test` bloquant, cibles `make test`/`test-cov`.
 - **Pourquoi** : la suite historique (~32 fichiers) a été supprimée volontairement ; la CI est réduite à lint. On veut un filet de sécurité **minimal et ciblé** (pas un re-portage), sur lequel s'appuieront T0.2, T0.3 et le gate T1.4.
 - **Périmètre (ce qu'on teste)** :
   1. `scripts/smoke_test.py` opérationnel (API + Qdrant + Redis + MLflow up) en cible `make smoke`.
@@ -517,7 +518,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 
 | ID | Titre | Epic | SP | Sprint | Owner | Statut |
 |----|-------|------|----|--------|-------|--------|
-| T0.0 | Suite de tests lean | E0 | 5 | S1 | BE | ⬜ |
+| T0.0 | Suite de tests lean | E0 | 5 | S1 | BE | ✅ |
 | T0.1 | Assainir le repo | E0 | 1 | S1 | PE | ✅ |
 | T0.2 | Clôturer bug 500 chat | E0 | 3 | S1 | BE | ⬜ |
 | T0.3 | Fusionner ingestion | E0 | 5 | S1 | BE | ⬜ |
@@ -543,4 +544,4 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T5.1 | Extraction tableaux | E5 | 5 | S6 | BE | ⬜ |
 | T5.2 | OCR images | E5 | 8 | backlog | BE | ⬜ |
 
-**Total** : 25 tickets · ~163 SP · dont 1 fait (T0.1).
+**Total** : 25 tickets · ~163 SP · dont 2 faits (T0.0, T0.1).
