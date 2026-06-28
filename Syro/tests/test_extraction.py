@@ -1,6 +1,15 @@
 """Non-régression extraction de texte (formats clés, sans dépendance lourde)."""
 
-from app.services.file_extractor import detect_source_type, extract_text_from_bytes
+import io
+
+from docx import Document  # type: ignore
+
+from app.services.file_extractor import (
+    _rows_to_markdown_table,
+    detect_source_type,
+    extract_text_from_bytes,
+)
+from app.services.chunker import chunk_text_hierarchical
 
 
 class TestExtractTextFromBytes:
@@ -20,6 +29,43 @@ class TestExtractTextFromBytes:
         # errors="ignore" : pas d'exception sur des octets non décodables.
         out = extract_text_from_bytes(b"ok\xff\xfe", "x.txt", "text/plain")
         assert "ok" in out
+
+
+class TestTableExtraction:
+    def test_rows_to_markdown_table(self):
+        md = _rows_to_markdown_table([["A", "B"], ["1", "2"]])
+        assert "| A | B |" in md
+        assert "| --- | --- |" in md
+        assert "| 1 | 2 |" in md
+
+    def test_docx_includes_table_cells(self):
+        doc = Document()
+        doc.add_paragraph("Introduction")
+        table = doc.add_table(rows=2, cols=2)
+        table.cell(0, 0).text = "Metric"
+        table.cell(0, 1).text = "Value"
+        table.cell(1, 0).text = "Recall@10"
+        table.cell(1, 1).text = "0.85"
+        buf = io.BytesIO()
+        doc.save(buf)
+
+        out = extract_text_from_bytes(
+            buf.getvalue(),
+            "report.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        assert "Introduction" in out
+        assert "Recall@10" in out
+        assert "0.85" in out
+        assert "| Metric | Value |" in out
+
+    def test_chunker_preserves_markdown_table_block(self):
+        text = "Intro\n\n| Col1 | Col2 |\n| --- | --- |\n| a | b |\n\nFin"
+        chunks = chunk_text_hierarchical(text, chunk_size=400, overlap=60)
+        table_chunks = [c for c in chunks if "| Col1 |" in c["text"]]
+        assert table_chunks
+        assert "| a | b |" in table_chunks[0]["text"]
 
 
 class TestDetectSourceType:

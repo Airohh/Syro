@@ -13,16 +13,67 @@ TEXT_TYPES = {
     "text/csv",
 }
 
+def _escape_md_cell(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ")
+
+
+def _rows_to_markdown_table(rows: list[list[str]]) -> str:
+    """Convertit des lignes de cellules en tableau Markdown."""
+    cleaned = [[c.strip() for c in row] for row in rows if any(c.strip() for c in row)]
+    if not cleaned:
+        return ""
+    width = max(len(r) for r in cleaned)
+    normalized = [r + [""] * (width - len(r)) for r in cleaned]
+    header = normalized[0]
+    lines = [
+        "| " + " | ".join(_escape_md_cell(c) for c in header) + " |",
+        "| " + " | ".join("---" for _ in header) + " |",
+    ]
+    for row in normalized[1:]:
+        lines.append("| " + " | ".join(_escape_md_cell(c) for c in row) + " |")
+    return "\n".join(lines)
+
+
 def _extract_pdf(content: bytes) -> str:
-    reader = PdfReader(io.BytesIO(content))
     parts: list[str] = []
+    reader = PdfReader(io.BytesIO(content))
     for page in reader.pages:
         parts.append(page.extract_text() or "")
-    return "\n".join(parts)
+
+    # Tableaux via pdfplumber si disponible (T5.1)
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for page in pdf.pages:
+                for table in page.extract_tables() or []:
+                    rows = [
+                        [(cell or "").strip() for cell in row]
+                        for row in table
+                        if row and any((cell or "").strip() for cell in row)
+                    ]
+                    md = _rows_to_markdown_table(rows)
+                    if md:
+                        parts.append(md)
+    except ImportError:
+        pass
+
+    return "\n\n".join(p for p in parts if p.strip())
+
 
 def _extract_docx(content: bytes) -> str:
     doc = Document(io.BytesIO(content))
-    return "\n".join(p.text for p in doc.paragraphs)
+    parts: list[str] = []
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        if text:
+            parts.append(text)
+    for table in doc.tables:
+        rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
+        md = _rows_to_markdown_table(rows)
+        if md:
+            parts.append(md)
+    return "\n\n".join(parts)
 
 def extract_text_from_bytes(content: bytes, filename: str, content_type: Optional[str]) -> str:
     ext = Path(filename).suffix.lower()

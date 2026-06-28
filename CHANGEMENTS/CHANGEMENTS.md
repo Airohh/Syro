@@ -7,6 +7,16 @@
 
 ---
 
+## Session 2026-06-28 — T5.1 extraction tableaux
+
+### T5.1 ✅ — DOCX/PDF tableaux → Markdown
+- `file_extractor.py` : `doc.tables` + `pdfplumber` pour PDF ; helper `_rows_to_markdown_table`.
+- `chunker.py` : blocs tableau Markdown préservés (pas de découpe au milieu des lignes).
+- Dépendance : `pdfplumber==0.11.4`.
+- Tests : +3 dans `test_extraction.py`. **108 tests verts.**
+
+---
+
 ## Session 2026-06-28 — T4.5 cache sémantique
 
 ### T4.5 ✅ — semantic cache retrieval

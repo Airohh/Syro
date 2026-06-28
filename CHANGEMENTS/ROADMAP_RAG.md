@@ -71,7 +71,7 @@ S'y ajoute une **dette technique ciblée** : duplication ingestion (worker vs se
 | Query understanding | 🟡 | Rewriting/HyDE livrés (opt-in, T2.1–T2.2) ; mesure golden set en attente stack. |
 | Historique conversationnel | 🟢 | T2.5 ✅ : `load_conversation_history` → retrieval (`history`) + prompt LLM ; flag rewriting réutilisable. |
 | Agentic / corrective | 🟡 | T3.1–T3.3 livrés (opt-in) ; T3.4 GraphRAG backlog. |
-| Tests | 🟡 | Suite lean **105 tests** (T0.0 ✅). |
+| Tests | 🟡 | Suite lean **108 tests** (T0.0 ✅). |
 | Tracing RAG | 🟡 | T1.3 Langfuse livré (opt-in) ; validation UI avec stack `--profile langfuse`. |
 | Ingestion multimodale | 🔴 | Texte seul. `_extract_docx` ignore tableaux/images. |
 | Structure code | 🟡 | `app/services/` plat (22 fichiers), 247 micro-communautés = couplage transversal. |
@@ -420,11 +420,10 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 ### EPIC E5 — Multimodal
 
 #### T5.1 — Extraction tableaux (DOCX/PDF)
-- **P2 · Story · 5 SP · S6 · BE · dépend : T0.3**
-- **Pourquoi** : beaucoup d'info en tableaux, aujourd'hui perdue.
-- **Étapes** : DOCX `doc.tables` + paragraphs ; PDF → markdown ; chunking conscient des tableaux.
-- **Fichiers** : `app/services/file_extractor.py`, `chunker.py`.
-- **Acceptation** : un DOCX/PDF avec tableau produit des chunks contenant les cellules.
+- **P2 · Story · 5 SP · S6 · BE · dépend : T0.3** · Statut : ✅ **Code livré (2026-06-28)**
+- **Livré** : DOCX `doc.tables` → Markdown ; PDF tableaux via `pdfplumber` ; chunker préserve les blocs `|...|`.
+- **Fichiers** : `file_extractor.py`, `chunker.py`, `requirements.txt` (+pdfplumber).
+- **Acceptation** : ✅ tests `test_extraction.py` (tableaux DOCX + chunk préservé).
 
 #### T5.2 — Images-with-text (OCR)
 - **P3 · Story · 8 SP · backlog · BE · dépend : T5.1**
@@ -538,7 +537,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T4.3 | Stockage objet | E4 | 5 | S6 | PE | ⬜ |
 | T4.4 | Cohérence DB↔Qdrant | E4 | 8 | backlog | BE | ⬜ |
 | T4.5 | Cache sémantique | E4 | 3 | backlog | PE | ✅ |
-| T5.1 | Extraction tableaux | E5 | 5 | S6 | BE | ⬜ |
+| T5.1 | Extraction tableaux | E5 | 5 | S6 | BE | ✅ |
 | T5.2 | OCR images | E5 | 8 | backlog | BE | ⬜ |
 
 **Total** : 25 tickets · ~163 SP · **17 tickets code ✅** (E0, E2, E3, T1.2–T1.4, T3.1–T3.3) · T1.1 🟡 (revue DA) · E4/E5 + T3.4 backlog.

@@ -137,7 +137,34 @@ def _split_by_headers(text: str) -> list[dict[str, Any]]:
     
     return sections
 
+def _is_markdown_table_block(text: str) -> bool:
+    lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return False
+    return all(ln.startswith("|") and ln.endswith("|") for ln in lines[:2])
+
+
 def _split_large_section(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """Découpe une section longue en préservant les blocs tableau Markdown."""
+    if _is_markdown_table_block(text):
+        if count_tokens(text) <= chunk_size:
+            return [text]
+    if "|" in text and "---" in text:
+        blocks = re.split(r"\n\n+", text)
+        chunks: list[str] = []
+        for block in blocks:
+            block = block.strip()
+            if not block:
+                continue
+            if _is_markdown_table_block(block):
+                chunks.append(block)
+            else:
+                chunks.extend(_split_large_section_words(block, chunk_size, overlap))
+        return chunks or [text]
+    return _split_large_section_words(text, chunk_size, overlap)
+
+
+def _split_large_section_words(text: str, chunk_size: int, overlap: int) -> list[str]:
     words = text.split()
     chunks: list[str] = []
     start = 0
