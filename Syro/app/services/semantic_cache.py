@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -12,6 +13,8 @@ import numpy as np
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+CacheScopeKey = tuple[Any, ...]
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -27,12 +30,47 @@ def _copy_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{**c, "metadata": dict(c.get("metadata") or {})} for c in chunks]
 
 
+def _filters_key(filters: dict[str, Any] | None) -> tuple[tuple[str, Any], ...]:
+    if not filters:
+        return ()
+    return tuple(sorted(filters.items()))
+
+
+def _history_key(history: Sequence[str] | None) -> tuple[str, ...]:
+    if not history:
+        return ()
+    return tuple(history[-3:])
+
+
+def _pipeline_key() -> tuple[Any, ...]:
+    """Dimensions qui changent le résultat du retrieval hybride."""
+    return (
+        settings.enable_query_rewriting,
+        settings.enable_hyde,
+        settings.enable_crag,
+        settings.enable_query_decomposition,
+        settings.enable_reranking,
+        settings.rrf_k,
+        settings.retrieval_top_k,
+        settings.rerank_top_k,
+    )
+
+
 def _scope_key(
     organization_id: int,
     domain: str | None,
     allowed_document_ids: frozenset[int] | None,
-) -> tuple[int, str, frozenset[int] | None]:
-    return (organization_id, domain or "", allowed_document_ids)
+    filters: dict[str, Any] | None = None,
+    history: Sequence[str] | None = None,
+) -> CacheScopeKey:
+    return (
+        organization_id,
+        domain or "",
+        allowed_document_ids,
+        _filters_key(filters),
+        _history_key(history),
+        _pipeline_key(),
+    )
 
 
 @dataclass
@@ -47,7 +85,7 @@ class SemanticCache:
     """Cache in-process par org/domain/permissions (Redis = évolution future)."""
 
     def __init__(self) -> None:
-        self._entries: dict[tuple, list[_CacheEntry]] = {}
+        self._entries: dict[CacheScopeKey, list[_CacheEntry]] = {}
 
     def lookup_retrieval(
         self,
@@ -57,12 +95,20 @@ class SemanticCache:
         *,
         domain: str | None = None,
         allowed_document_ids: frozenset[int] | None = None,
+        filters: dict[str, Any] | None = None,
+        history: Sequence[str] | None = None,
     ) -> tuple[list[dict[str, Any]] | None, str]:
         """Retourne (chunks, status) avec status hit|miss|disabled."""
         if not settings.enable_semantic_cache:
             return None, "disabled"
 
-        key = _scope_key(organization_id, domain, allowed_document_ids)
+        key = _scope_key(
+            organization_id,
+            domain,
+            allowed_document_ids,
+            filters=filters,
+            history=history,
+        )
         now = time.time()
         ttl = settings.semantic_cache_ttl_seconds
         threshold = settings.semantic_cache_similarity_threshold
@@ -103,11 +149,19 @@ class SemanticCache:
         *,
         domain: str | None = None,
         allowed_document_ids: frozenset[int] | None = None,
+        filters: dict[str, Any] | None = None,
+        history: Sequence[str] | None = None,
     ) -> None:
         if not settings.enable_semantic_cache or not chunks:
             return
 
-        key = _scope_key(organization_id, domain, allowed_document_ids)
+        key = _scope_key(
+            organization_id,
+            domain,
+            allowed_document_ids,
+            filters=filters,
+            history=history,
+        )
         entry = _CacheEntry(
             query=query,
             embedding=query_embedding.copy(),
@@ -127,8 +181,7 @@ class SemanticCache:
             del self._entries[key]
 
     def invalidate_domain(self, organization_id: int, domain: str) -> None:
-        key_prefix = (organization_id, domain, None)
-        keys = [k for k in self._entries if k[0] == key_prefix[0] and k[1] == domain]
+        keys = [k for k in self._entries if k[0] == organization_id and k[1] == domain]
         for key in keys:
             del self._entries[key]
 

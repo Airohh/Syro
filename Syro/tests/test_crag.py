@@ -24,6 +24,9 @@ class TestLexicalOverlap:
     def test_no_overlap(self):
         assert lexical_overlap("python asyncio", ["java spring boot"]) == 0.0
 
+    def test_empty_query_returns_zero(self):
+        assert lexical_overlap("??", ["some chunk text"]) == 0.0
+
 
 class TestTopRetrievalStrength:
     def test_empty(self):

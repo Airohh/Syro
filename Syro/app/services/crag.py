@@ -28,7 +28,7 @@ def lexical_overlap(query: str, chunk_texts: list[str]) -> float:
     """Fraction des termes significatifs de la question présents dans les chunks."""
     terms = _query_terms(query)
     if not terms:
-        return 1.0
+        return 0.0
     found: set[str] = set()
     for text in chunk_texts:
         found |= _query_terms(text)

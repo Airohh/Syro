@@ -133,6 +133,8 @@ def retrieve_chunks_with_metadata(
                 query_embedding,
                 domain=domain,
                 allowed_document_ids=allowed_document_ids,
+                filters=filters,
+                history=history,
             )
             if cached is not None:
                 return cached[:top_k]
@@ -186,6 +188,8 @@ def retrieve_chunks_with_metadata(
                     results,
                     domain=domain,
                     allowed_document_ids=allowed_document_ids,
+                    filters=filters,
+                    history=history,
                 )
             except Exception as exc:
                 logger.debug("Semantic cache store skipped: %s", exc)

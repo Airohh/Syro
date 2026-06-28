@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from app.services.semantic_cache import SemanticCache, _cosine_similarity
+from app.services.semantic_cache import SemanticCache, _cosine_similarity, _scope_key
 
 
 def _chunk(cid: str) -> dict:
@@ -89,9 +89,58 @@ class TestSemanticCache:
         cache = SemanticCache()
         vec = np.array([1.0, 0.0])
         cache.store_retrieval(1, "q", vec, [_chunk("1")])
-        # Forcer expiration
-        key = (1, "", None)
+        key = _scope_key(1, None, None)
         cache._entries[key][0].created_at = time.time() - 10
 
         hit, _ = cache.lookup_retrieval(1, "q", vec)
+        assert hit is None
+
+    @patch("app.services.semantic_cache.settings")
+    def test_miss_when_filters_differ(self, mock_settings):
+        mock_settings.enable_semantic_cache = True
+        mock_settings.semantic_cache_similarity_threshold = 0.9
+        mock_settings.semantic_cache_ttl_seconds = 3600
+        mock_settings.semantic_cache_max_entries = 100
+        mock_settings.enable_query_rewriting = False
+        mock_settings.enable_hyde = False
+        mock_settings.enable_crag = False
+        mock_settings.enable_query_decomposition = False
+        mock_settings.enable_reranking = True
+        mock_settings.rrf_k = 60
+        mock_settings.retrieval_top_k = 20
+        mock_settings.rerank_top_k = 5
+
+        cache = SemanticCache()
+        vec = np.array([1.0, 0.0])
+        cache.store_retrieval(
+            1, "q", vec, [_chunk("1")], filters={"domain": "tech"}
+        )
+
+        hit, status = cache.lookup_retrieval(
+            1, "q", vec, filters={"domain": "mlops"}
+        )
+        assert status == "miss"
+        assert hit is None
+
+    @patch("app.services.semantic_cache.settings")
+    def test_miss_when_history_differ(self, mock_settings):
+        mock_settings.enable_semantic_cache = True
+        mock_settings.semantic_cache_similarity_threshold = 0.9
+        mock_settings.semantic_cache_ttl_seconds = 3600
+        mock_settings.semantic_cache_max_entries = 100
+        mock_settings.enable_query_rewriting = False
+        mock_settings.enable_hyde = False
+        mock_settings.enable_crag = False
+        mock_settings.enable_query_decomposition = False
+        mock_settings.enable_reranking = True
+        mock_settings.rrf_k = 60
+        mock_settings.retrieval_top_k = 20
+        mock_settings.rerank_top_k = 5
+
+        cache = SemanticCache()
+        vec = np.array([1.0, 0.0])
+        cache.store_retrieval(1, "q", vec, [_chunk("1")], history=["turn A"])
+
+        hit, status = cache.lookup_retrieval(1, "q", vec, history=["turn B"])
+        assert status == "miss"
         assert hit is None
