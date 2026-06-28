@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -25,9 +26,51 @@ sys.path.insert(0, str(SYRO_ROOT))
 
 from app.db import db_session
 from app.services.ingestion import checksum_bytes, create_document_entry, process_document
+from app.services.vector_store import VectorStore
 
 CORPUS_DIR = EVAL_DIR / "corpus"
 ORGANIZATION_ID = 1
+
+
+def _domain_from_tags(tags_json: str | None) -> str | None:
+    """Recover the domain stored as a `domain:<x>` tag at ingest time."""
+    try:
+        tags = json.loads(tags_json) if tags_json else []
+    except (json.JSONDecodeError, TypeError):
+        return None
+    for tag in tags:
+        if isinstance(tag, str) and tag.startswith("domain:"):
+            return tag.split(":", 1)[1]
+    return None
+
+
+def clear_previous_corpus() -> None:
+    """Drop documents from a prior run so re-ingestion is idempotent.
+
+    Without this, each run INSERTs fresh document rows (versions bump, no
+    checksum dedup) and indexes their chunks into Qdrant, so duplicate corpus
+    chunks accumulate and skew the RAGAS benchmark run-to-run.
+    """
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT id, tags FROM documents WHERE organization_id = ? AND source_type = 'corpus'",
+            (ORGANIZATION_ID,),
+        ).fetchall()
+
+    if not rows:
+        return
+
+    store = VectorStore()
+    for row in rows:
+        store.delete_chunks_by_document(row["id"], domain=_domain_from_tags(row["tags"]))
+
+    with db_session() as db:
+        db.execute(
+            "DELETE FROM documents WHERE organization_id = ? AND source_type = 'corpus'",
+            (ORGANIZATION_ID,),
+        )
+
+    print(f"Cleared {len(rows)} corpus documents from a previous run\n")
 
 
 def main() -> None:
@@ -37,6 +80,8 @@ def main() -> None:
     if not files:
         print(f"No corpus files found under {CORPUS_DIR}")
         sys.exit(1)
+
+    clear_previous_corpus()
 
     print(f"Ingesting {len(files)} corpus files into organization {ORGANIZATION_ID}\n")
 
