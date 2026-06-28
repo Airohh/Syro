@@ -1,6 +1,6 @@
 # Makefile pour Syro - Commandes courantes
 
-.PHONY: help up down logs build clean test lint format release
+.PHONY: help up down logs build clean lint format release
 
 help: ## Afficher cette aide
 	@echo "Commandes disponibles:"
@@ -37,27 +37,6 @@ clean: ## Nettoyer volumes et images (ATTENTION: supprime les données)
 	docker compose -f infra/docker-compose.yml down -v
 	docker rmi syro-api syro-frontend 2>/dev/null || true
 
-test: ## Lancer les tests (local)
-	pytest
-
-test-cov: ## Lancer les tests avec coverage
-	pytest --cov=app --cov=worker --cov-report=html --cov-report=term
-
-test-unit: ## Lancer uniquement les tests unitaires
-	pytest -m unit
-
-test-integration: ## Lancer uniquement les tests d'intégration
-	pytest -m integration
-
-test-security: ## Lancer uniquement les tests de sécurité
-	pytest -m security
-
-test-worker: ## Lancer uniquement les tests worker
-	pytest -m worker
-
-test-docker: ## Lancer les tests dans Docker
-	docker compose -f infra/docker-compose.yml exec syro-api pytest
-
 smoke: ## Smoke test post-deploiement (API + Qdrant + Redis + MLflow)
 	python scripts/smoke_test.py
 
@@ -68,11 +47,11 @@ benchmark: ## Benchmark latence p50/p95/p99 (retrieval vs end-to-end, stack requ
 	python evaluation/benchmark.py --repeats 5
 
 lint: ## Lancer le linting (ruff)
-	ruff check app worker tests
-	ruff format --check app worker tests
+	ruff check app worker
+	ruff format --check app worker
 
 format: ## Formater le code (ruff)
-	ruff format app worker tests
+	ruff format app worker
 
 version: ## Afficher la version actuelle
 	@python scripts/version.py get

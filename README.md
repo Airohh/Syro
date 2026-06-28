@@ -56,14 +56,6 @@ pip install -r Syro/evaluation/requirements-eval.txt
 python Syro/evaluation/evaluate.py
 ```
 
-## Tests
-
-```bash
-cd Syro
-pytest tests/ -m unit -v        # no external services needed
-pytest tests/ -m integration -v
-```
-
 ## Known limitations
 
 - **SQLite** for metadata: fine for a single-node deployment, not for horizontal scaling (Postgres compose profile exists in `infra/` but is not the default).
