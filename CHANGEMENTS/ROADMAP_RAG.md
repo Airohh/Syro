@@ -4,9 +4,10 @@
 >
 > **Sources** : analyse du graphe graphify (1593 nœuds), lecture du code, doc d'architecture interne, best practices RAG 2026 (Pramana, Ultra-RAG, Onyx, WeKnora, NVIDIA RAG Blueprint).
 >
-> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 Phase 0 (E0) complète (T0.0–T0.4 ✅) → prochaine : E1 socle de mesure (T1.1)
+> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 Phase 0 (E0) complète (T0.0–T0.4 ✅) · E1 en cours (T1.1 🟡 golden set 100 paires, relecture DA restante)
 
 > **Journal de progression**
+> - `2026-06-28` — **T1.1 🟡** : golden set étendu à 100 paires (4 buckets, `relevant_doc_ids` sur 72), générateur `build_golden_set.py`. Reste relecture DA + annotation des 20 legacy.
 > - `2026-06-28` — **Phase 0 (E0) complète** : T0.0–T0.4 tous ✅.
 > - `2026-06-28` — **T0.4 ✅** : ADR-001 multi-domaines **Accepted** (Option A). Indirection ports retirée (`domainPorts.ts` → source unique `VITE_API_URL`, `tsc` clean).
 > - `2026-06-28` — **T0.3 ✅** : ingestion dédupliquée → `run_ingestion()` + `infer_metadata()` partagés dans `app/services/ingestion.py` ; `worker/tasks.py` et `process_document` délèguent (~80 lignes dupliquées supprimées). Couvert par `tests/test_ingestion_pipeline.py`.
@@ -271,7 +272,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 ### EPIC E1 — Socle de mesure
 
 #### T1.1 — Étendre le golden set à 100–200 paires
-- **P0 · Story · 8 SP · S1-S2 · DA + PE · dépend : —**
+- **P0 · Story · 8 SP · S1-S2 · DA + PE · dépend : —** · Statut : 🟡 **Première passe livrée (2026-06-28)** — `eval_dataset.json` à **100 paires**, 4 buckets (`factual_lookup` 36, `exact_identifier` 28, `multi_hop` 8, `out_of_corpus` 8 ; + 20 legacy à annoter), `relevant_doc_ids` sur 72/100. Générateur reproductible `evaluation/build_golden_set.py`. **Reste** : relecture DA (R1), annoter les 20 paires legacy, viser ~150.
 - **Pourquoi** : prérequis de **toute** mesure d'amélioration. Standard 2026 = 100–200.
 - **Étapes** :
   1. Couvrir les buckets d'intention : lookup factuel, multi-hop, identifiants exacts (codes/SKU), hors-corpus (doit refuser).
@@ -527,7 +528,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T0.2 | Clôturer bug 500 chat | E0 | 3 | S1 | BE | ✅ |
 | T0.3 | Fusionner ingestion | E0 | 5 | S1 | BE | ✅ |
 | T0.4 | ADR multi-domaines | E0 | 2 | S1 | TL | ✅ |
-| T1.1 | Golden set 100–200 | E1 | 8 | S1-S2 | DA/PE | ⬜ |
+| T1.1 | Golden set 100–200 | E1 | 8 | S1-S2 | DA/PE | 🟡 |
 | T1.2 | Éval retrieval vs génération | E1 | 5 | S2 | PE | ⬜ |
 | T1.3 | Langfuse | E1 | 5 | S2 | PE | ⬜ |
 | T1.4 | Éval en CI | E1 | 3 | S3 | PE | ⬜ |

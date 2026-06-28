@@ -45,7 +45,14 @@ Branche : `fix/chat-500-resilience` · **9 commits, pushés** (`454a2aa..e7d31d6
 - ADR-001 statut **Accepted** (Option A : mono-API + filtres Qdrant par domaine ; le code y était déjà de facto).
 - `frontend/src/utils/domainPorts.ts` réduit à une source unique pilotée par `VITE_API_URL` ; constante morte `DOMAIN_PORTS` supprimée ; signatures conservées (aucun call-site cassé), `tsc --noEmit` clean.
 
-> **Phase 0 (E0) complète** : T0.0–T0.4 tous ✅. Prochaine : E1 socle de mesure (T1.1 golden set 100–200).
+> **Phase 0 (E0) complète** : T0.0–T0.4 tous ✅.
+
+### T1.1 🟡 — golden set étendu (`feat(eval)`)
+- `eval_dataset.json` porté à **100 paires** (schéma + `intent` + `relevant_doc_ids`). Buckets : factual 36, exact_identifier 28, multi_hop 8, out_of_corpus 8 (+ 20 legacy à annoter). `relevant_doc_ids` sur 72/100.
+- Générateur reproductible `evaluation/build_golden_set.py` (paires curées depuis le corpus, dédup par question, idempotent). `corpus/README.md` documente le schéma + process.
+- Reste : relecture annotateur (R1), annotation des 20 legacy, viser ~150. Débloque T1.2 (métriques retrieval Recall@K/nDCG via `relevant_doc_ids`).
+
+> Prochaine : E1 — T1.2 (éval retrieval vs génération), T1.3 (Langfuse).
 
 ---
 

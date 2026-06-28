@@ -98,5 +98,717 @@
     "domain": "mlops",
     "question": "Comment évaluer la qualité d'un pipeline RAG sans RAGAS ?",
     "ground_truth": "Sans RAGAS, on peut évaluer un pipeline RAG avec : (1) évaluation humaine — des annotateurs notent la pertinence et la fidélité des réponses sur un dataset de référence ; (2) métriques NLP classiques — BLEU, ROUGE, BERTScore comparent les réponses générées aux réponses de référence ; (3) métriques de retrieval — MRR (Mean Reciprocal Rank), NDCG, Hit@K mesurent si les bons documents sont récupérés ; (4) LLM-as-a-judge — un LLM puissant (GPT-4) note automatiquement la qualité des réponses selon des critères définis. Ces méthodes sont complémentaires et adressent des aspects différents de la qualité."
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Quelles sont les trois étapes du pipeline RAG ?",
+    "ground_truth": "Indexation (découpage en chunks, embeddings, stockage vectoriel), récupération (la question est encodée puis comparée aux chunks pour le top-k) et génération (les chunks récupérés sont injectés dans le prompt du LLM).",
+    "relevant_doc_ids": [
+      "01-rag-fundamentals.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Pourquoi le RAG réduit-il les hallucinations ?",
+    "ground_truth": "Parce que la réponse est ancrée dans des documents réels et citables récupérés à la requête, au lieu de provenir uniquement des paramètres entraînés du modèle.",
+    "relevant_doc_ids": [
+      "01-rag-fundamentals.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Quand préférer le RAG au fine-tuning pour ajouter de la connaissance ?",
+    "ground_truth": "Dès qu'il faut répondre sur un corpus spécifique, à jour et vérifiable : le RAG met à jour la base sans réentraîner et évite le coût du fine-tuning.",
+    "relevant_doc_ids": [
+      "01-rag-fundamentals.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Que se passe-t-il à l'étape de récupération du RAG ?",
+    "ground_truth": "La question de l'utilisateur est encodée puis comparée aux chunks indexés pour récupérer les plus pertinents (top-k).",
+    "relevant_doc_ids": [
+      "01-rag-fundamentals.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Quelle est la faiblesse de la recherche vectorielle dense ?",
+    "ground_truth": "Elle peut manquer une correspondance exacte de terme rare (référence produit, acronyme précis) car elle raisonne sur le sens.",
+    "relevant_doc_ids": [
+      "02-recherche-vectorielle-bm25.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Sur quoi repose le score BM25 ?",
+    "ground_truth": "Sur la fréquence des termes (TF), la fréquence inverse de document (IDF) et la normalisation par la longueur du document.",
+    "relevant_doc_ids": [
+      "02-recherche-vectorielle-bm25.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Comment la recherche hybride combine-t-elle les deux scores ?",
+    "ground_truth": "Par une somme pondérée, par ex. score = α·score_vectoriel + (1-α)·score_BM25 ; avec α=0,7 on privilégie le sémantique tout en gardant la précision lexicale.",
+    "relevant_doc_ids": [
+      "02-recherche-vectorielle-bm25.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Quels sont les paramètres typiques de taille et d'overlap d'un chunk ?",
+    "ground_truth": "Taille cible de 300 à 800 tokens par chunk, overlap de 10 à 20 % de la taille du chunk.",
+    "relevant_doc_ids": [
+      "03-chunking-hierarchique.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Pourquoi appliquer un overlap entre chunks consécutifs ?",
+    "ground_truth": "Pour ne pas perdre une idée à cheval sur une frontière entre deux chunks.",
+    "relevant_doc_ids": [
+      "03-chunking-hierarchique.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Quelle métadonnée le chunking hiérarchique permet-il de conserver ?",
+    "ground_truth": "Le chemin de titres (headers), ce qui améliore le contexte fourni au LLM.",
+    "relevant_doc_ids": [
+      "03-chunking-hierarchique.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Quel modèle est typiquement utilisé comme reranker ?",
+    "ground_truth": "Un cross-encoder, par exemple BAAI/bge-reranker-v2-m3.",
+    "relevant_doc_ids": [
+      "04-reranking.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Combien de chunks garde-t-on après reranking pour le LLM ?",
+    "ground_truth": "Le rerank top-k, typiquement 3 à 5 passages.",
+    "relevant_doc_ids": [
+      "04-reranking.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Quel est le coût du reranking et comment le gérer ?",
+    "ground_truth": "Une latence supplémentaire ; on l'active en mode qualité et on peut le désactiver en mode rapide.",
+    "relevant_doc_ids": [
+      "04-reranking.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Pourquoi un bi-encoder est-il rapide pour le retrieval ?",
+    "ground_truth": "Parce qu'il encode requête et documents séparément : les embeddings des documents sont pré-calculés et indexés, on compare alors un vecteur de requête à des vecteurs pré-calculés.",
+    "relevant_doc_ids": [
+      "05-bi-encoder-cross-encoder.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Quel modèle de bi-encoder est cité pour sentence-transformers ?",
+    "ground_truth": "all-MiniLM-L6-v2.",
+    "relevant_doc_ids": [
+      "05-bi-encoder-cross-encoder.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Pourquoi le cross-encoder ne peut-il pas chercher dans toute la base ?",
+    "ground_truth": "Il prend la paire (requête, document) ensemble et ne peut rien pré-calculer : il faut une passe du modèle par paire, trop lent à l'échelle de la base.",
+    "relevant_doc_ids": [
+      "05-bi-encoder-cross-encoder.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Quel index Qdrant utilise-t-il pour la recherche ANN ?",
+    "ground_truth": "HNSW (Hierarchical Navigable Small World).",
+    "relevant_doc_ids": [
+      "06-qdrant.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "En quel langage Qdrant est-il écrit ?",
+    "ground_truth": "En Rust.",
+    "relevant_doc_ids": [
+      "06-qdrant.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Qu'est-ce qu'un point dans Qdrant ?",
+    "ground_truth": "Un vecteur accompagné de son id et de son payload (métadonnées JSON).",
+    "relevant_doc_ids": [
+      "06-qdrant.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Comment Qdrant gère-t-il le multi-tenant ?",
+    "ground_truth": "Par le filtrage par métadonnées (ex. domain ou organization_id) combiné à la similarité vectorielle, et par des collections isolées par domaine ou tenant.",
+    "relevant_doc_ids": [
+      "06-qdrant.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Quelles sont les trois parties d'un JWT ?",
+    "ground_truth": "Un header, un payload (les claims comme sub, exp, role) et une signature, encodés en base64url.",
+    "relevant_doc_ids": [
+      "07-fastapi-jwt-auth.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Pourquoi un JWT est-il dit stateless ?",
+    "ground_truth": "Le serveur n'a pas besoin de stocker la session : il vérifie simplement la signature du token.",
+    "relevant_doc_ids": [
+      "07-fastapi-jwt-auth.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Quel utilitaire FastAPI récupère le token depuis le header Authorization ?",
+    "ground_truth": "OAuth2PasswordBearer.",
+    "relevant_doc_ids": [
+      "07-fastapi-jwt-auth.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Avec quoi hache-t-on le mot de passe au login ?",
+    "ground_truth": "bcrypt.",
+    "relevant_doc_ids": [
+      "07-fastapi-jwt-auth.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Quel code HTTP renvoyer quand le quota de rate limiting est dépassé ?",
+    "ground_truth": "429 Too Many Requests, avec un en-tête Retry-After.",
+    "relevant_doc_ids": [
+      "08-rate-limiting-fastapi.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Pourquoi utiliser Redis plutôt que la mémoire pour le rate limiting ?",
+    "ground_truth": "Dès qu'il y a plusieurs workers/instances, le compteur doit être partagé entre eux.",
+    "relevant_doc_ids": [
+      "08-rate-limiting-fastapi.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Cite trois algorithmes de rate limiting.",
+    "ground_truth": "Fixed window, sliding window et token bucket.",
+    "relevant_doc_ids": [
+      "08-rate-limiting-fastapi.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Quel en-tête informe le client du quota restant ?",
+    "ground_truth": "X-RateLimit-Remaining.",
+    "relevant_doc_ids": [
+      "08-rate-limiting-fastapi.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Pourquoi FastAPI gère-t-il mieux les charges I/O concurrentes que Flask ?",
+    "ground_truth": "FastAPI s'appuie sur ASGI et async/await (non bloquant), alors que Flask est synchrone par défaut (WSGI).",
+    "relevant_doc_ids": [
+      "09-fastapi-vs-flask.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Sur quels composants repose FastAPI ?",
+    "ground_truth": "Starlette (ASGI) et Pydantic.",
+    "relevant_doc_ids": [
+      "09-fastapi-vs-flask.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Quelle documentation FastAPI génère-t-il automatiquement ?",
+    "ground_truth": "Un schéma OpenAPI et des interfaces Swagger et ReDoc à partir des types Python.",
+    "relevant_doc_ids": [
+      "09-fastapi-vs-flask.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Pourquoi ne faut-il jamais exposer les détails d'exception au client ?",
+    "ground_truth": "Pour éviter de fuiter des informations (stack trace) ; on renvoie un message générique et on logue le détail côté serveur.",
+    "relevant_doc_ids": [
+      "10-securite-api-rest.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Comment configurer CORS de façon sûre en production ?",
+    "ground_truth": "Strictement : autoriser uniquement les origines de confiance, pas '*' en production.",
+    "relevant_doc_ids": [
+      "10-securite-api-rest.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Où stocker les secrets d'une API ?",
+    "ground_truth": "Dans des variables d'environnement ou un coffre, jamais dans le code ni le dépôt.",
+    "relevant_doc_ids": [
+      "10-securite-api-rest.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "exact_identifier",
+    "question": "Cite deux en-têtes de sécurité HTTP recommandés.",
+    "ground_truth": "Par exemple Strict-Transport-Security, X-Content-Type-Options: nosniff, X-Frame-Options, Content-Security-Policy.",
+    "relevant_doc_ids": [
+      "10-securite-api-rest.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Comment les services se joignent-ils dans un réseau Docker Compose ?",
+    "ground_truth": "Par leur nom de service sur le réseau par défaut créé par Compose (ex. http://qdrant:6333).",
+    "relevant_doc_ids": [
+      "11-docker-compose.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "À quoi sert depends_on dans Docker Compose ?",
+    "ground_truth": "À définir l'ordre de démarrage des services.",
+    "relevant_doc_ids": [
+      "11-docker-compose.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "factual_lookup",
+    "question": "Comment superposer des configurations Docker Compose ?",
+    "ground_truth": "Via docker-compose.override.yml ou plusieurs fichiers -f fichier1.yml -f fichier2.yml.",
+    "relevant_doc_ids": [
+      "11-docker-compose.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Que tracke MLflow Tracking ?",
+    "ground_truth": "Les paramètres, métriques, artefacts (modèles, graphiques) et le code de chaque run.",
+    "relevant_doc_ids": [
+      "01-mlflow.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quels sont les stades d'un modèle dans le Model Registry MLflow ?",
+    "ground_truth": "Staging, Production, Archived.",
+    "relevant_doc_ids": [
+      "01-mlflow.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quelle fonction MLflow démarre un run et logue une métrique ?",
+    "ground_truth": "mlflow.start_run() (en contexte), puis mlflow.log_metric(...) (avec aussi log_param et log_artifact).",
+    "relevant_doc_ids": [
+      "01-mlflow.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Quelles sont les quatre familles de KPIs à surveiller en production ?",
+    "ground_truth": "Performance du modèle (qualité), qualité des données (drift), performance opérationnelle (système) et usage/business.",
+    "relevant_doc_ids": [
+      "02-kpis-production.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quels percentiles de latence surveille-t-on ?",
+    "ground_truth": "p50, p95 et p99.",
+    "relevant_doc_ids": [
+      "02-kpis-production.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Pourquoi les métriques de qualité sont-elles souvent calculées en différé ?",
+    "ground_truth": "Parce que le label réel (ground truth) arrive plus tard.",
+    "relevant_doc_ids": [
+      "02-kpis-production.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Quels sont les trois piliers de l'observabilité ?",
+    "ground_truth": "Les logs, les métriques et les traces.",
+    "relevant_doc_ids": [
+      "03-observabilite-rag.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "À quoi sert un correlation ID ?",
+    "ground_truth": "À suivre une requête de bout en bout (retrieval, reranking, génération) dans les logs structurés.",
+    "relevant_doc_ids": [
+      "03-observabilite-rag.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quel outil trace une requête à travers chaque service et étape ?",
+    "ground_truth": "OpenTelemetry.",
+    "relevant_doc_ids": [
+      "03-observabilite-rag.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Quelle est la différence entre data drift et concept drift ?",
+    "ground_truth": "Le data drift est le changement de la distribution des features P(X) ; le concept drift est le changement de la relation P(y|X) entre entrées et cible.",
+    "relevant_doc_ids": [
+      "04-data-drift.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quels tests statistiques détectent le drift ?",
+    "ground_truth": "PSI (Population Stability Index), le test de Kolmogorov-Smirnov, et le Chi-2 pour les variables catégorielles.",
+    "relevant_doc_ids": [
+      "04-data-drift.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Cite deux outils de détection de drift.",
+    "ground_truth": "Evidently et NannyML (ou des checks maison loggés dans MLflow).",
+    "relevant_doc_ids": [
+      "04-data-drift.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "De quoi Celery a-t-il besoin pour fonctionner ?",
+    "ground_truth": "D'un broker de messages (souvent Redis ou RabbitMQ), et optionnellement d'un backend de résultats.",
+    "relevant_doc_ids": [
+      "05-celery-rag-async.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quel statut a un document juste après l'upload, avant traitement ?",
+    "ground_truth": "queued.",
+    "relevant_doc_ids": [
+      "05-celery-rag-async.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quel mode Celery exécute les tâches de façon synchrone pour les tests ?",
+    "ground_truth": "Le mode eager (task_always_eager=True).",
+    "relevant_doc_ids": [
+      "05-celery-rag-async.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Quelles métriques RAGAS évaluent le retrieval ?",
+    "ground_truth": "Context Recall (toute l'information nécessaire est-elle récupérée) et Context Precision (les passages pertinents sont-ils bien classés en tête).",
+    "relevant_doc_ids": [
+      "06-metriques-ragas.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Que signifie une faithfulness basse ?",
+    "ground_truth": "Une hallucination : la réponse n'est pas soutenue par les passages récupérés.",
+    "relevant_doc_ids": [
+      "06-metriques-ragas.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "RAGAS a-t-il besoin d'annotations humaines à grande échelle ?",
+    "ground_truth": "Non : il utilise un LLM comme juge pour noter automatiquement ; chaque métrique est un score entre 0 et 1.",
+    "relevant_doc_ids": [
+      "06-metriques-ragas.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Cite des métriques de ranking pour évaluer le retrieval sans LLM.",
+    "ground_truth": "Recall@k, Precision@k, MRR (Mean Reciprocal Rank) et nDCG.",
+    "relevant_doc_ids": [
+      "07-evaluer-rag-sans-ragas.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Que mesure le MRR ?",
+    "ground_truth": "L'inverse du rang du premier passage pertinent : il récompense le fait de le placer en tête.",
+    "relevant_doc_ids": [
+      "07-evaluer-rag-sans-ragas.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quelles métriques comparent une réponse générée à une référence ?",
+    "ground_truth": "BLEU, ROUGE, METEOR (chevauchement) et la similarité sémantique type BERTScore.",
+    "relevant_doc_ids": [
+      "07-evaluer-rag-sans-ragas.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Quels sont les modes de model serving ?",
+    "ground_truth": "Online/temps réel, batch, streaming et edge.",
+    "relevant_doc_ids": [
+      "08-model-serving.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "factual_lookup",
+    "question": "Pourquoi charger le modèle une seule fois au démarrage ?",
+    "ground_truth": "Pour éviter de le recharger à chaque requête (load-once via cache).",
+    "relevant_doc_ids": [
+      "08-model-serving.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Cite des serveurs d'inférence dédiés.",
+    "ground_truth": "TorchServe, TensorFlow Serving et NVIDIA Triton.",
+    "relevant_doc_ids": [
+      "08-model-serving.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Quel format portable exporter pour l'interopérabilité ?",
+    "ground_truth": "ONNX.",
+    "relevant_doc_ids": [
+      "08-model-serving.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "exact_identifier",
+    "question": "Cite deux stratégies de déploiement progressif.",
+    "ground_truth": "Canary et blue-green.",
+    "relevant_doc_ids": [
+      "08-model-serving.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "multi_hop",
+    "question": "Comment bi-encoder et cross-encoder se combinent-ils dans le pattern RAG standard ?",
+    "ground_truth": "Récupération large par bi-encoder (retrieval rapide et scalable), puis reranking par cross-encoder (précision) sur les candidats.",
+    "relevant_doc_ids": [
+      "05-bi-encoder-cross-encoder.md",
+      "04-reranking.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "multi_hop",
+    "question": "Pourquoi combiner recherche hybride et reranking ?",
+    "ground_truth": "La recherche hybride (vectorielle + BM25) récupère largement les bons passages, puis le reranking cross-encoder réordonne finement et ne garde que les meilleurs pour le LLM.",
+    "relevant_doc_ids": [
+      "02-recherche-vectorielle-bm25.md",
+      "04-reranking.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "multi_hop",
+    "question": "Quelle métrique RAGAS correspond au Recall@k de l'éval sans RAGAS, et que diagnostiquent-elles ?",
+    "ground_truth": "Le Context Recall de RAGAS et le Recall@k mesurent tous deux si le retrieval a récupéré les passages nécessaires ; un score bas pointe un problème de retrieval (chunking, embeddings, top-k).",
+    "relevant_doc_ids": [
+      "06-metriques-ragas.md",
+      "07-evaluer-rag-sans-ragas.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "multi_hop",
+    "question": "Comment Celery et l'observabilité se combinent-ils pour l'ingestion ?",
+    "ground_truth": "Celery exécute l'ingestion en arrière-plan et met à jour le statut ; l'observabilité (logs, métriques Prometheus, traces) instrumente chaque étape pour suivre latence et erreurs.",
+    "relevant_doc_ids": [
+      "05-celery-rag-async.md",
+      "03-observabilite-rag.md"
+    ]
+  },
+  {
+    "domain": "mlops",
+    "intent": "multi_hop",
+    "question": "Quel lien entre data drift et les KPIs de production ?",
+    "ground_truth": "Le data drift est l'une des familles de KPIs (qualité des données) à surveiller ; sa détection par tests statistiques déclenche une alerte puis un réentraînement.",
+    "relevant_doc_ids": [
+      "04-data-drift.md",
+      "02-kpis-production.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "multi_hop",
+    "question": "Pourquoi un bon chunking améliore-t-il les métriques de retrieval ?",
+    "ground_truth": "Un chunking hiérarchique produit des chunks sémantiquement cohérents, ce qui augmente le rappel/la précision du contexte (Context Recall/Precision ou Recall@k/nDCG) car les frontières suivent le sens.",
+    "relevant_doc_ids": [
+      "03-chunking-hierarchique.md",
+      "07-evaluer-rag-sans-ragas.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "multi_hop",
+    "question": "Comment sécuriser une API FastAPI contre l'accès non autorisé et les abus ?",
+    "ground_truth": "Authentification JWT via dépendances (OAuth2PasswordBearer, get_current_user) et rate limiting (réponses 429) pour contrer le brute force/DoS, le tout servi en HTTPS.",
+    "relevant_doc_ids": [
+      "07-fastapi-jwt-auth.md",
+      "10-securite-api-rest.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "multi_hop",
+    "question": "Quel rôle jouent Qdrant et Docker Compose dans un stack RAG ?",
+    "ground_truth": "Qdrant est la base vectorielle (mémoire sémantique) interrogée à chaque requête ; Docker Compose orchestre l'API, le worker, Qdrant, Redis et MLflow sur un réseau commun.",
+    "relevant_doc_ids": [
+      "06-qdrant.md",
+      "11-docker-compose.md"
+    ]
+  },
+  {
+    "domain": "tech",
+    "intent": "out_of_corpus",
+    "question": "Quel est le prix par token de GPT-4 chez OpenAI ?",
+    "ground_truth": "Cette information n'est pas présente dans le corpus documentaire.",
+    "relevant_doc_ids": []
+  },
+  {
+    "domain": "mlops",
+    "intent": "out_of_corpus",
+    "question": "Comment configurer un Horizontal Pod Autoscaler dans Kubernetes ?",
+    "ground_truth": "Le corpus ne couvre pas Kubernetes ; l'information n'est pas disponible.",
+    "relevant_doc_ids": []
+  },
+  {
+    "domain": "tech",
+    "intent": "out_of_corpus",
+    "question": "Quelle est la capitale de l'Australie ?",
+    "ground_truth": "Question hors sujet : cette information n'est pas dans le corpus documentaire.",
+    "relevant_doc_ids": []
+  },
+  {
+    "domain": "mlops",
+    "intent": "out_of_corpus",
+    "question": "Comment fine-tuner Llama 3 avec LoRA ?",
+    "ground_truth": "Le corpus ne traite pas du fine-tuning de Llama 3 ni de LoRA.",
+    "relevant_doc_ids": []
+  },
+  {
+    "domain": "tech",
+    "intent": "out_of_corpus",
+    "question": "Quelle est la complexité temporelle du tri rapide ?",
+    "ground_truth": "Cette information n'est pas couverte par le corpus.",
+    "relevant_doc_ids": []
+  },
+  {
+    "domain": "mlops",
+    "intent": "out_of_corpus",
+    "question": "Comment déployer une fonction sur AWS Lambda avec Terraform ?",
+    "ground_truth": "Le corpus ne décrit pas le déploiement AWS Lambda ni Terraform.",
+    "relevant_doc_ids": []
+  },
+  {
+    "domain": "tech",
+    "intent": "out_of_corpus",
+    "question": "Quels sont les horaires d'ouverture du support Syro ?",
+    "ground_truth": "Cette information n'existe pas dans le corpus documentaire.",
+    "relevant_doc_ids": []
+  },
+  {
+    "domain": "mlops",
+    "intent": "out_of_corpus",
+    "question": "Comment entraîner un réseau de neurones convolutif pour la vision ?",
+    "ground_truth": "Le corpus ne couvre pas les CNN ni la vision par ordinateur.",
+    "relevant_doc_ids": []
   }
 ]
