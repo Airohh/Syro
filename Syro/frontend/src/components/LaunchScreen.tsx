@@ -10,34 +10,21 @@ interface Props {
   onBackendReady: () => void;
 }
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      isElectron: boolean;
-      startBackend: () => void;
-      onBackendStatus: (cb: (data: { type: string; message: string }) => void) => () => void;
-    };
-  }
-}
-
 export default function LaunchScreen({ onBackendReady }: Props) {
   const [status, setStatus] = useState<'idle' | 'launching' | 'ready' | 'error'>('idle');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [dots, setDots] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isElectron = !!window.electronAPI?.isElectron;
 
   useEffect(() => {
     const interval = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500);
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-start polling in browser mode (no Electron)
+  // Auto-start polling on mount
   useEffect(() => {
-    if (!isElectron) {
-      handleStart();
-    }
+    handleStart();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -71,18 +58,8 @@ export default function LaunchScreen({ onBackendReady }: Props) {
     if (status === 'launching') return;
     setStatus('launching');
     setLogs([]);
-
-    if (isElectron && window.electronAPI) {
-      const unsub = window.electronAPI.onBackendStatus((data) => {
-        addLog(data.type as LogEntry['type'], data.message);
-      });
-      window.electronAPI.startBackend();
-      pollHealth();
-      return () => unsub();
-    } else {
-      addLog('info', 'En attente du backend sur http://127.0.0.1:8000...');
-      pollHealth();
-    }
+    addLog('info', 'En attente du backend sur http://127.0.0.1:8000...');
+    pollHealth();
   };
 
   useEffect(() => {
@@ -134,12 +111,10 @@ export default function LaunchScreen({ onBackendReady }: Props) {
           </div>
         )}
 
-        {!isElectron && (
-          <p className="launch-hint">
-            Commande manuelle :{' '}
-            <code>uvicorn app.main:app --port 8000</code>
-          </p>
-        )}
+        <p className="launch-hint">
+          Commande manuelle :{' '}
+          <code>uvicorn app.main:app --port 8000</code>
+        </p>
       </div>
 
       <style>{`

@@ -3,12 +3,6 @@ import axios, { AxiosInstance } from 'axios';
 import { getDomainApiUrl, getDomainPort } from '../utils/domainPorts';
 import { getDomainConfig } from '../utils/domainConfig';
 
-// Use environment variable or default to localhost
-const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_URL ||
-  (import.meta.env.MODE === 'production'
-    ? 'https://syro-api.railway.app'
-    : 'http://127.0.0.1:8000');
-
 let currentDomainId: string = 'general';
 
 // Cache instances by baseURL to avoid creating new Axios instances on every call

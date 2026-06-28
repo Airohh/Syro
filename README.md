@@ -30,9 +30,7 @@ Detailed architecture: [docs/architecture.md](docs/architecture.md) and [Syro/RE
 
 | Path | Purpose |
 |------|---------|
-| [`Syro/`](Syro/) | The base application (FastAPI API, Celery worker, React frontend, Docker infra, tests) — **start here** |
-| [`create_syro_instance.py`](create_syro_instance.py) | Create a specialized instance for one domain (e.g. `python create_syro_instance.py tech`) |
-| [`update_instances.py`](update_instances.py) | Propagate base-code changes to all existing instances |
+| [`Syro/`](Syro/) | The application (FastAPI API, Celery worker, React frontend, Docker infra, tests) — **start here** |
 | [`docs/`](docs/) | Architecture and getting-started guides |
 
 ## Quick Start
