@@ -10,6 +10,7 @@ from ..services.chat import (
     build_answer,
     build_answer_stream,
     create_conversation_if_needed,
+    load_conversation_history,
     store_message,
 )
 from ..db import get_db
@@ -18,6 +19,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 domain_router = APIRouter(prefix="/domains/{domain}/chat", tags=["chat"])
+
+
+def _sse(chunk: str) -> str:
+    """Formate un fragment en évènement SSE valide.
+
+    Un fragment contenant un saut de ligne (réponses markdown, code) casse le
+    cadrage si on émet `data: {chunk}\\n\\n` brut : le `\\n` interne coupe
+    l'évènement. La spec SSE veut un champ `data:` par ligne.
+    """
+    body = "".join(f"data: {line}\n" for line in chunk.split("\n"))
+    return f"{body}\n"
 
 @router.post("/message", response_model=MessageResponse)
 def send_message(
@@ -36,6 +48,7 @@ def send_message(
         conversation_id = create_conversation_if_needed(
             db, org["id"], payload.conversation_id
         )
+        history = load_conversation_history(db, conversation_id)
         store_message(db, conversation_id, "user", payload.content, user["id"])
         
         logger.info(f"Building answer for org {org['id']}, query: {payload.content[:50]}...")
@@ -43,6 +56,8 @@ def send_message(
             org["id"],
             payload.content,
             include_sources=True,
+            user_id=user["id"],
+            conversation_history=history,
         )
         
         store_message(db, conversation_id, "assistant", answer, None)
@@ -65,9 +80,10 @@ def send_message(
     except Exception as e:
         logger.error(f"Error in send_message: {type(e).__name__}: {str(e)}", exc_info=True)
         db.rollback()
+        # Détails de l'exception réservés aux logs (pas d'info disclosure côté client)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors du traitement du message: {str(e)}"
+            detail="Erreur lors du traitement du message. Consultez les logs serveur.",
         )
 
 @router.post("/message/stream")
@@ -82,14 +98,20 @@ def send_message_stream(
     conversation_id = create_conversation_if_needed(
         db, org["id"], payload.conversation_id
     )
+    history = load_conversation_history(db, conversation_id)
     store_message(db, conversation_id, "user", payload.content, user["id"])
 
     def generate():
         full_answer = ""
         try:
-            for chunk in build_answer_stream(org["id"], payload.content):
+            for chunk in build_answer_stream(
+                org["id"],
+                payload.content,
+                user_id=user["id"],
+                conversation_history=history,
+            ):
                 full_answer += chunk
-                yield f"data: {chunk}\n\n"
+                yield _sse(chunk)
 
             store_message(db, conversation_id, "assistant", full_answer, None)
             usage = len(full_answer.split()) + len(payload.content.split())
@@ -130,33 +152,47 @@ def send_message_for_domain(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Domain '{domain}' not found. Available: {list(DOMAINS.keys())}",
         )
-    conversation_id = create_conversation_if_needed(
-        db, org["id"], payload.conversation_id
-    )
-    store_message(db, conversation_id, "user", payload.content, user["id"])
-    answer, usage, sources = build_answer(
-        organization_id=org["id"],
-        query=payload.content,
-        include_sources=True,
-        auto_detect_domain=False,
-        domain=domain,
-    )
-    store_message(db, conversation_id, "assistant", answer, None)
-    db.execute(
-        "INSERT INTO usage_events (organization_id, user_id, event_type, amount, metadata) VALUES (?, ?, ?, ?, ?)",
-        (org["id"], user["id"], "chat_completion", usage, None),
-    )
-    db.execute(
-        "UPDATE organizations SET credit_balance = MAX(credit_balance - ?, 0) WHERE id = ?",
-        (usage, org["id"]),
-    )
-    db.commit()
-    return MessageResponse(
-        conversation_id=conversation_id,
-        message=answer,
-        usage=usage,
-        sources=sources,
-    )
+    try:
+        conversation_id = create_conversation_if_needed(
+            db, org["id"], payload.conversation_id
+        )
+        history = load_conversation_history(db, conversation_id)
+        store_message(db, conversation_id, "user", payload.content, user["id"])
+        answer, usage, sources = build_answer(
+            organization_id=org["id"],
+            query=payload.content,
+            include_sources=True,
+            auto_detect_domain=False,
+            domain=domain,
+            user_id=user["id"],
+            conversation_history=history,
+        )
+        store_message(db, conversation_id, "assistant", answer, None)
+        db.execute(
+            "INSERT INTO usage_events (organization_id, user_id, event_type, amount, metadata) VALUES (?, ?, ?, ?, ?)",
+            (org["id"], user["id"], "chat_completion", usage, None),
+        )
+        db.execute(
+            "UPDATE organizations SET credit_balance = MAX(credit_balance - ?, 0) WHERE id = ?",
+            (usage, org["id"]),
+        )
+        db.commit()
+        return MessageResponse(
+            conversation_id=conversation_id,
+            message=answer,
+            usage=usage,
+            sources=sources,
+        )
+    except Exception as e:
+        logger.error(
+            f"Error in send_message_for_domain: {type(e).__name__}: {str(e)}",
+            exc_info=True,
+        )
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erreur lors du traitement du message. Consultez les logs serveur.",
+        )
 
 @domain_router.post("/message/stream")
 def send_message_stream_for_domain(
@@ -176,6 +212,7 @@ def send_message_stream_for_domain(
     conversation_id = create_conversation_if_needed(
         db, org["id"], payload.conversation_id
     )
+    history = load_conversation_history(db, conversation_id)
     store_message(db, conversation_id, "user", payload.content, user["id"])
 
     def generate():
@@ -186,9 +223,11 @@ def send_message_stream_for_domain(
                 query=payload.content,
                 auto_detect_domain=False,
                 domain=domain,
+                user_id=user["id"],
+                conversation_history=history,
             ):
                 full_answer += chunk
-                yield f"data: {chunk}\n\n"
+                yield _sse(chunk)
 
             store_message(db, conversation_id, "assistant", full_answer, None)
             usage = len(full_answer.split()) + len(payload.content.split())

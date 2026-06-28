@@ -1,2 +1,1 @@
-"""Test suite for Syro RAG system."""
-
+"""Suite de tests lean Syro (smoke + non-régression ciblée)."""

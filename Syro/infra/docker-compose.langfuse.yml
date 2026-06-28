@@ -1,0 +1,52 @@
+# Langfuse self-hosted (T1.3) — profil optionnel
+# Usage: docker compose -f infra/docker-compose.yml -f infra/docker-compose.langfuse.yml --profile langfuse up -d
+#
+# Puis créer un projet dans Langfuse UI (http://localhost:3000) et renseigner :
+#   LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY dans .env
+#   LANGFUSE_ENABLED=true sur syro-api
+
+services:
+  langfuse-db:
+    profiles: ["langfuse"]
+    image: postgres:16-alpine
+    container_name: syro-langfuse-db
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:-langfuse}
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db:/var/lib/postgresql/data
+    networks:
+      - syro-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  langfuse:
+    profiles: ["langfuse"]
+    image: langfuse/langfuse:2
+    container_name: syro-langfuse
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse}@langfuse-db:5432/langfuse
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-in-production}
+      SALT: ${LANGFUSE_SALT:-change-me-in-production}
+      TELEMETRY_ENABLED: "false"
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    networks:
+      - syro-network
+
+  syro-api:
+    environment:
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+      - LANGFUSE_HOST=http://langfuse:3000
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+
+volumes:
+  langfuse_db:

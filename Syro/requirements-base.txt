@@ -42,9 +42,6 @@ opentelemetry-exporter-otlp==1.22.0
 opentelemetry-instrumentation-fastapi==0.43b0
 opentelemetry-instrumentation-httpx==0.43b0
 
-# Sécurité
-python-magic==0.4.27
-
 # Dev tools (optionnel, peut être installé séparément)
 ruff==0.1.9
 

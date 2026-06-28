@@ -1,6 +1,6 @@
 # Makefile pour Syro - Commandes courantes
 
-.PHONY: help up down logs build clean test lint format release
+.PHONY: help up down logs build clean test test-cov lint format release
 
 help: ## Afficher cette aide
 	@echo "Commandes disponibles:"
@@ -37,33 +37,36 @@ clean: ## Nettoyer volumes et images (ATTENTION: supprime les données)
 	docker compose -f infra/docker-compose.yml down -v
 	docker rmi syro-api syro-frontend 2>/dev/null || true
 
-test: ## Lancer les tests (local)
+test: ## Lancer la suite lean (smoke + non-régression)
 	pytest
 
-test-cov: ## Lancer les tests avec coverage
-	pytest --cov=app --cov=worker --cov-report=html --cov-report=term
+test-cov: ## Suite lean avec coverage
+	pytest --cov=app --cov=worker --cov-report=term-missing
 
-test-unit: ## Lancer uniquement les tests unitaires
-	pytest -m unit
+smoke: ## Smoke test post-deploiement (API + Qdrant + Redis + MLflow)
+	python scripts/smoke_test.py
 
-test-integration: ## Lancer uniquement les tests d'intégration
-	pytest -m integration
+eval: ## Evaluation RAGAS reproductible (necessite OPENAI_API_KEY ou USE_OLLAMA=true)
+	python evaluation/evaluate.py
 
-test-security: ## Lancer uniquement les tests de sécurité
-	pytest -m security
+eval-gate: ## Gate d'integrite du golden set (deterministe, sans LLM)
+	python evaluation/validate_golden_set.py
 
-test-worker: ## Lancer uniquement les tests worker
-	pytest -m worker
+eval-retrieval-gate: ## Gate seuils retrieval sur report.json (apres make eval)
+	python evaluation/validate_retrieval_thresholds.py --skip-missing
 
-test-docker: ## Lancer les tests dans Docker
-	docker compose -f infra/docker-compose.yml exec syro-api pytest
+tune: ## Grid-search rrf_k sur golden set (stack + corpus requis)
+	python evaluation/tune.py
+
+benchmark: ## Benchmark latence p50/p95/p99 (retrieval vs end-to-end, stack requis)
+	python evaluation/benchmark.py --repeats 5
 
 lint: ## Lancer le linting (ruff)
-	ruff check app worker tests
-	ruff format --check app worker tests
+	ruff check app worker
+	ruff format --check app worker
 
 format: ## Formater le code (ruff)
-	ruff format app worker tests
+	ruff format app worker
 
 version: ## Afficher la version actuelle
 	@python scripts/version.py get

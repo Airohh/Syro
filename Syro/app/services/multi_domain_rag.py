@@ -13,6 +13,8 @@ def search_multi_domain(
     domains: list[str] | None = None,
     top_k_per_domain: int = 5,
     top_k_final: int | None = None,
+    allowed_document_ids: frozenset[int] | None = None,
+    history: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     if top_k_final is None:
         top_k_final = settings.rerank_top_k
@@ -27,6 +29,8 @@ def search_multi_domain(
             top_k=top_k_final,
             filters=None,
             domain=domains[0],
+            allowed_document_ids=allowed_document_ids,
+            history=history,
         )
         for result in results:
             result["metadata"] = result.get("metadata", {})
@@ -46,6 +50,8 @@ def search_multi_domain(
             top_k=top_k_per_domain,
             filters=None,
             domain=domain,
+            allowed_document_ids=allowed_document_ids,
+            history=history,
         )
         
         for result in results:

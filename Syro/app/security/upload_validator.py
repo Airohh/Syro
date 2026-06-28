@@ -5,15 +5,6 @@ from typing import List
 
 from ..config import settings
 
-# Import optionnel de python-magic (nécessite libmagic système)
-try:
-    import magic
-    MAGIC_AVAILABLE = True
-except ImportError:
-    # python-magic non disponible (libmagic manquant sur Windows notamment)
-    MAGIC_AVAILABLE = False
-    magic = None
-
 # Types MIME autorisés
 ALLOWED_MIME_TYPES = {
     # Documents texte

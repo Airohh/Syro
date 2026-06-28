@@ -1,0 +1,6 @@
+{
+  "recall_at_10": {"min": 0.45, "description": "Recall@10 retrieval — ajuster après baseline stack"},
+  "ndcg_at_10": {"min": 0.35, "description": "nDCG@10 retrieval"},
+  "mrr": {"min": 0.30, "description": "Mean reciprocal rank"},
+  "hit_at_5": {"min": 0.40, "description": "Hit@5"}
+}

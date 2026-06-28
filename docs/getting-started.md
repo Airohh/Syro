@@ -9,29 +9,23 @@
 ```bash
 # 1. Cloner le repository
 git clone https://github.com/Airohh/Syro.git
-cd Syro
+cd Syro/Syro
 
-# 2. Créer une instance
-python create_syro_instance.py tech
-
-# 3. Aller dans l'instance
-cd SyroTech
-
-# 4. Créer l'environnement virtuel
+# 2. Créer l'environnement virtuel
 python -m venv .venv
 .venv\Scripts\activate  # Windows
 # source .venv/bin/activate  # Linux/Mac
 
-# 5. Installer les dépendances
+# 3. Installer les dépendances
 pip install -r requirements.txt
 
-# 6. Démarrer Qdrant
+# 4. Démarrer Qdrant
 docker-compose up -d qdrant
 
-# 7. Initialiser la base de données
+# 5. Initialiser la base de données
 python scripts/init_db.py
 
-# 8. Lancer l'API
+# 6. Lancer l'API
 uvicorn app.main:app --reload
 ```
 ## Frontend
@@ -48,7 +42,7 @@ npm run dev
 3. Documentation API : `http://localhost:8000/docs`
 ## Configuration
 
-Créez un fichier `.env` dans votre instance :
+Créez un fichier `.env` à la racine de l'application :
 
 ```env
 DOMAIN=tech

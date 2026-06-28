@@ -7,11 +7,28 @@ except ImportError:
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+_DEFAULT_SECRET_KEY = "dev-secret-change-me"
+
+_PERFORMANCE_MODE_CONFIGS: dict[str, dict[str, Any]] = {
+    "fast": {
+        "retrieval_top_k": 5,
+        "rerank_top_k": 3,
+        "enable_reranking": False,
+        "hybrid_search_alpha": 0.8,
+    },
+    "quality": {
+        "retrieval_top_k": 15,
+        "rerank_top_k": 5,
+        "enable_reranking": True,
+        "hybrid_search_alpha": 0.7,
+    },
+}
+
 class Settings(BaseSettings):
     app_name: str = "Syro"
     domain: str = "tech"
     debug: bool = True
-    secret_key: str = "dev-secret-change-me"
+    secret_key: str = _DEFAULT_SECRET_KEY
     access_token_exp_minutes: int = 60 * 24
     llm_provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434/v1"
@@ -19,6 +36,11 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 768
     chat_model: str = "llama3.2"
     chat_temperature: float = 0.2
+    llm_timeout: float = 60.0  # Timeout (s) des appels chat LLM
+    embedding_timeout: float = 30.0  # Timeout (s) des appels embeddings
+    llm_max_retries: int = 2  # Retries automatiques sur erreurs transitoires
+    circuit_breaker_threshold: int = 5  # Échecs consécutifs avant ouverture
+    circuit_breaker_reset_seconds: float = 30.0  # Repos avant essai half-open
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     data_dir: Path = PROJECT_ROOT / "storage"
@@ -31,11 +53,29 @@ class Settings(BaseSettings):
     adaptive_fast_threshold_ms: float = 3000.0
     adaptive_quality_threshold_ms: float = 1500.0
     adaptive_window_size: int = 5
-    hybrid_search_alpha: float = 0.7
+    hybrid_search_alpha: float = 0.7  # déprécié : la fusion utilise désormais RRF (rang)
+    rrf_k: int = 60  # constante de lissage Reciprocal Rank Fusion (standard = 60)
     retrieval_top_k: int = 10
     rerank_top_k: int = 5
     enable_reranking: bool = True
     rerank_weight: float = 0.7
+    enable_query_rewriting: bool = False  # T2.1 : reformulations avant retrieval
+    query_rewrite_max_variants: int = 2  # reformulations LLM max (hors question originale)
+    enable_hyde: bool = False  # T2.2 : vecteur de recherche depuis passage hypothétique
+    enable_crag: bool = False  # T3.1 : retrieval correctif si pertinence faible
+    crag_retry_threshold: float = 0.25  # score combiné sous ce seuil → retry
+    crag_incorrect_threshold: float = 0.12  # verdict incorrect (retry garanti)
+    crag_retry_top_k_multiplier: int = 2  # top_k de la passe corrective
+    enable_self_rag: bool = False  # T3.2 : filtre IsRel par chunk avant prompt
+    self_rag_min_relevance: float = 0.15  # seuil IsRel heuristique
+    self_rag_min_chunks: int = 3  # minimum conservé même si sous seuil
+    self_rag_max_chunks: int = 8  # maximum injecté dans le prompt
+    enable_query_decomposition: bool = False  # T3.3 : décomposition multi-hop
+    query_decomposition_max_subqueries: int = 3
+    enable_semantic_cache: bool = False  # T4.5 : cache retrieval par similarité embedding
+    semantic_cache_similarity_threshold: float = 0.95
+    semantic_cache_max_entries: int = 500
+    semantic_cache_ttl_seconds: int = 3600
     ollama_use_gpu: bool = True
     embedding_cache_enabled: bool = True
     embedding_cache_size: int = 1000
@@ -64,6 +104,10 @@ class Settings(BaseSettings):
     metrics_enabled: bool = True
     tracing_enabled: bool = False  # Désactivé par défaut (nécessite OTLP endpoint)
     otlp_endpoint: str | None = None  # Ex: http://localhost:4317
+    langfuse_enabled: bool = False  # T1.3 : tracing RAG par requête
+    langfuse_host: str = "http://localhost:3000"
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
     
     # Sécurité
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
@@ -78,42 +122,33 @@ class Settings(BaseSettings):
         case_sensitive = False
     
     def get_fast_mode_config(self) -> dict[str, Any]:
-        return {
-            "retrieval_top_k": 5,
-            "rerank_top_k": 3,
-            "enable_reranking": False,
-            "hybrid_search_alpha": 0.8,
-        }
-    
+        return dict(_PERFORMANCE_MODE_CONFIGS["fast"])
+
     def get_quality_mode_config(self) -> dict[str, Any]:
-        return {
-            "retrieval_top_k": 15,
-            "rerank_top_k": 5,
-            "enable_reranking": True,
-            "hybrid_search_alpha": 0.7,
-        }
-    
+        return dict(_PERFORMANCE_MODE_CONFIGS["quality"])
+
     def apply_performance_mode(self) -> None:
-        if self.performance_mode == "fast":
-            config = self.get_fast_mode_config()
-            self.retrieval_top_k = config["retrieval_top_k"]
-            self.rerank_top_k = config["rerank_top_k"]
-            self.enable_reranking = config["enable_reranking"]
-            self.hybrid_search_alpha = config["hybrid_search_alpha"]
-        elif self.performance_mode == "quality":
-            config = self.get_quality_mode_config()
-            self.retrieval_top_k = config["retrieval_top_k"]
-            self.rerank_top_k = config["rerank_top_k"]
-            self.enable_reranking = config["enable_reranking"]
-            self.hybrid_search_alpha = config["hybrid_search_alpha"]
-        elif self.performance_mode == "adaptive":
-            config = self.get_quality_mode_config()
-            self.retrieval_top_k = config["retrieval_top_k"]
-            self.rerank_top_k = config["rerank_top_k"]
-            self.enable_reranking = config["enable_reranking"]
-            self.hybrid_search_alpha = config["hybrid_search_alpha"]
+        # "adaptive" démarre sur le profil quality puis ajuste à chaud (cf
+        # adaptive_performance.py) ; les modes inconnus restent sur les défauts.
+        profile = "quality" if self.performance_mode == "adaptive" else self.performance_mode
+        config = _PERFORMANCE_MODE_CONFIGS.get(profile)
+        if config is None:
+            return
+        for key, value in config.items():
+            setattr(self, key, value)
+
+    def validate_production_secrets(self) -> None:
+        """Refuse de démarrer en prod (debug=False) avec le secret par défaut."""
+        if not self.debug and self.secret_key == _DEFAULT_SECRET_KEY:
+            raise RuntimeError(
+                "SECRET_KEY uses the insecure default in production (debug=False). "
+                "Set a strong SECRET_KEY env var before deploying."
+            )
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)
 (settings.data_dir / "tmp").mkdir(exist_ok=True)
 settings.apply_performance_mode()
+# validate_production_secrets() est appelé au démarrage (lifespan, main.py),
+# pas à l'import : un import de config en env prod-like ne doit pas crasher
+# pytest/CLI ; le refus de démarrer se fait au boot du serveur.

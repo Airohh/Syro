@@ -1,7 +1,8 @@
-﻿import sqlite3
+﻿import logging
+import sqlite3
 import uuid
 
-from fastapi import APIRouter, Body, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Body, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, status
 
 from ..config import settings
 from ..dependencies import require_active_org, enforce_rate_limit, get_current_user
@@ -14,6 +15,9 @@ from ..services.ingestion import (
 from ..services.celery_client import enqueue_document_ingestion
 from ..services.file_extractor import detect_source_type, extract_text_from_bytes
 from ..services.document_classifier import classify_document, should_ask_confirmation
+from ..services.permissions_service import get_user_permissions
+from ..services.vector_store import VectorStore, VectorStoreError
+from ..services.bm25_search import bm25_search
 from ..schemas import DocumentUploadWithClassificationResponse
 from ..db import get_db
 from ..domains import DOMAINS
@@ -21,6 +25,8 @@ from ..security import (
     MAX_FILE_SIZE,
     MAX_TEXT_SIZE,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 domain_router = APIRouter(prefix="/domains/{domain}/documents", tags=["documents"])
@@ -37,6 +43,56 @@ def list_documents(
         (org["id"],),
     ).fetchall()
     return {"documents": [dict(d) for d in docs]}
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    document_id: int,
+    user=Depends(get_current_user),
+    org=Depends(require_active_org(0)),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Supprime un document : métadonnées + chunks SQLite, points Qdrant
+    (toutes les collections de domaine), et invalide l'index BM25.
+
+    Nécessite la permission `can_delete_documents` (owner/admin par défaut).
+    """
+    doc = db.execute(
+        "SELECT id FROM documents WHERE id = ? AND organization_id = ?",
+        (document_id, org["id"]),
+    ).fetchone()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    permissions = get_user_permissions(user["id"], org["id"], db)
+    if not permissions or not permissions.get("can_delete_documents"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission 'can_delete_documents' required",
+        )
+
+    # Le domaine d'indexation n'est pas stocké sur le document : on purge
+    # toutes les collections de domaine. Un échec Qdrant ne bloque pas la
+    # suppression SQLite (vecteurs orphelins inoffensifs car filtrés par org,
+    # et re-purgés à la prochaine ingestion du même document_id).
+    vector_store = VectorStore()
+    for domain_id in DOMAINS:
+        try:
+            vector_store.delete_chunks_by_document(document_id, domain=domain_id)
+        except VectorStoreError as e:
+            logger.warning(
+                "Qdrant cleanup failed for doc %d (domain=%s): %s",
+                document_id, domain_id, e,
+            )
+
+    db.execute("DELETE FROM doc_chunks WHERE document_id = ?", (document_id,))
+    db.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+    db.commit()
+
+    bm25_search.mark_for_rebuild(org["id"])
 
 @router.post("/text", response_model=DocumentUploadResponse)
 def upload_text_document(

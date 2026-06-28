@@ -1,132 +1,159 @@
-"""
-Tests unitaires pour le service de recherche hybride.
-"""
+"""Non-régression retrieval : fusion RRF + dégradation BM25-only."""
 
 import numpy as np
-import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
-from app.services.hybrid_search import hybrid_search
 
-class TestHybridSearch:
-    """Tests pour le service de recherche hybride."""
-    
-    @patch('app.services.hybrid_search.reranker')
-    @patch('app.services.hybrid_search.bm25_search')
-    @patch('app.services.hybrid_search.VectorStore')
-    @patch('app.services.hybrid_search.get_embedding_vector')
-    @patch('app.services.hybrid_search.settings')
-    def test_hybrid_search_basic(
-        self,
-        mock_settings,
-        mock_get_embedding,
-        mock_vector_store_class,
-        mock_bm25_search,
-        mock_reranker
+def _vec(chunk_id, text, score):
+    return {"chunk_id": chunk_id, "text": text, "score": score, "metadata": {}}
+
+
+class TestRRFFusion:
+    @patch("app.services.hybrid_search.bm25_search")
+    @patch("app.services.hybrid_search.VectorStore")
+    @patch("app.services.hybrid_search.get_embedding_vector")
+    @patch("app.services.hybrid_search.settings")
+    def test_rrf_ranks_by_rank_not_raw_score(
+        self, mock_settings, mock_embed, mock_vs_class, mock_bm25
     ):
-        """Test recherche hybride basique."""
-        mock_settings.rerank_top_k = 5
-        mock_settings.retrieval_top_k = 5
-        mock_settings.hybrid_search_alpha = 0.5
-        
-        mock_get_embedding.return_value = np.array([0.1] * 384)
-        
-        mock_vector_store = Mock()
-        mock_vector_store_class.return_value = mock_vector_store
-        mock_vector_store.search.return_value = [
-            {"text": "vector result 1", "score": 0.9, "metadata": {}, "chunk_id": "1_1_1"},
-            {"text": "vector result 2", "score": 0.8, "metadata": {}, "chunk_id": "1_1_2"},
-        ]
-        
-        mock_bm25_search.search.return_value = [
-            {"text": "bm25 result 1", "score": 0.7, "metadata": {}, "chunk_id": "1_1_3"},
-        ]
-        
-        # Mock reranker pour retourner les résultats triés
-        mock_reranker.rerank.return_value = [
-            {"text": "vector result 1", "score": 0.9, "metadata": {}, "chunk_id": "1_1_1"},
-            {"text": "vector result 2", "score": 0.8, "metadata": {}, "chunk_id": "1_1_2"},
-            {"text": "bm25 result 1", "score": 0.7, "metadata": {}, "chunk_id": "1_1_3"},
-        ]
-        
-        results = hybrid_search(
-            organization_id=1,
-            query="test query",
-            top_k=5,
-            domain="tech"
-        )
-        
-        assert len(results) > 0
-        mock_vector_store.search.assert_called_once()
-        mock_bm25_search.search.assert_called_once()
-    
-    @patch('app.services.hybrid_search.bm25_search')
-    @patch('app.services.hybrid_search.VectorStore')
-    @patch('app.services.hybrid_search.get_embedding_vector')
-    @patch('app.services.hybrid_search.settings')
-    def test_hybrid_search_with_filters(
-        self,
-        mock_settings,
-        mock_get_embedding,
-        mock_vector_store_class,
-        mock_bm25_search
-    ):
-        """Test recherche hybride avec filtres."""
-        mock_settings.rerank_top_k = 5
-        mock_settings.retrieval_top_k = 5
-        mock_settings.hybrid_search_alpha = 0.5
+        """Un chunk présent dans les deux listes doit remonter via la somme RRF,
+        sans dépendre des scores bruts (immunité aux échelles)."""
+        mock_settings.retrieval_top_k = 10
+        mock_settings.rrf_k = 60
         mock_settings.enable_reranking = False
 
-        mock_get_embedding.return_value = np.array([0.1] * 384)
-        
-        mock_vector_store = Mock()
-        mock_vector_store_class.return_value = mock_vector_store
-        mock_vector_store.search.return_value = []
-        
-        mock_bm25_search.search.return_value = []
-        
-        results = hybrid_search(
-            organization_id=1,
-            query="test query",
-            top_k=5,
-            filters={"domain": "medical"},
-            domain="medical"
-        )
-        
-        assert isinstance(results, list)
-        # Vérifier que les filtres sont passés
-        mock_vector_store.search.assert_called_once()
-    
-    @patch('app.services.hybrid_search.bm25_search')
-    @patch('app.services.hybrid_search.VectorStore')
-    @patch('app.services.hybrid_search.get_embedding_vector')
-    @patch('app.services.hybrid_search.settings')
-    def test_hybrid_search_empty_results(
-        self,
-        mock_settings,
-        mock_get_embedding,
-        mock_vector_store_class,
-        mock_bm25_search
+        mock_embed.return_value = np.array([0.1] * 8)
+
+        mock_vs = Mock()
+        mock_vs_class.return_value = mock_vs
+        # B est en rang 1 côté vecteur, rang 0 côté BM25 -> somme RRF la plus haute.
+        mock_vs.search.return_value = [_vec("A", "a", 0.99), _vec("B", "b", 0.10)]
+        mock_bm25.search.return_value = [_vec("B", "b", 0.99), _vec("C", "c", 0.01)]
+
+        results = hybrid_search(organization_id=1, query="q", top_k=10)
+
+        ids = [r["chunk_id"] for r in results]
+        assert ids[0] == "B"  # double hit gagne
+        assert set(ids) == {"A", "B", "C"}
+
+    @patch("app.services.hybrid_search.bm25_search")
+    @patch("app.services.hybrid_search.VectorStore")
+    @patch("app.services.hybrid_search.get_embedding_vector")
+    @patch("app.services.hybrid_search.settings")
+    def test_embedding_failure_degrades_to_bm25_only(
+        self, mock_settings, mock_embed, mock_vs_class, mock_bm25
     ):
-        """Test recherche hybride sans résultats."""
-        mock_settings.rerank_top_k = 5
-        mock_settings.retrieval_top_k = 5
-        mock_settings.hybrid_search_alpha = 0.5
+        """Embedding KO ne doit pas lever : on tombe sur BM25 seul, jamais de
+        recherche vectorielle (pas de 500)."""
+        mock_settings.retrieval_top_k = 10
+        mock_settings.rrf_k = 60
         mock_settings.enable_reranking = False
 
-        mock_get_embedding.return_value = np.array([0.1] * 384)
-        
-        mock_vector_store = Mock()
-        mock_vector_store_class.return_value = mock_vector_store
-        mock_vector_store.search.return_value = []
-        
-        mock_bm25_search.search.return_value = []
-        
-        results = hybrid_search(
+        mock_embed.side_effect = RuntimeError("embeddings provider down")
+        mock_bm25.search.return_value = [_vec("C", "c", 0.5)]
+
+        results = hybrid_search(organization_id=1, query="q", top_k=10)
+
+        assert [r["chunk_id"] for r in results] == ["C"]
+        mock_vs_class.assert_not_called()  # aucune recherche vectorielle tentée
+
+    @patch("app.services.hybrid_search.bm25_search")
+    @patch("app.services.hybrid_search.VectorStore")
+    @patch("app.services.hybrid_search.get_embedding_vector")
+    @patch("app.services.hybrid_search.settings")
+    def test_qdrant_down_degrades_to_bm25_only(
+        self, mock_settings, mock_embed, mock_vs_class, mock_bm25
+    ):
+        """Qdrant KO (VectorStoreError) ne doit pas lever : le chemin vectoriel
+        est neutralisé, on sert BM25 seul (clôture du bug 500 chat, T0.2)."""
+        mock_settings.retrieval_top_k = 10
+        mock_settings.rrf_k = 60
+        mock_settings.enable_reranking = False
+
+        mock_embed.return_value = np.array([0.1] * 8)
+        mock_vs = Mock()
+        mock_vs_class.return_value = mock_vs
+        mock_vs.search.side_effect = VectorStoreError("qdrant unreachable")
+        mock_bm25.search.return_value = [_vec("C", "c", 0.5)]
+
+        results = hybrid_search(organization_id=1, query="q", top_k=10)
+
+        assert [r["chunk_id"] for r in results] == ["C"]
+
+    @patch("app.services.hybrid_search.expand_queries")
+    @patch("app.services.hybrid_search.bm25_search")
+    @patch("app.services.hybrid_search.VectorStore")
+    @patch("app.services.hybrid_search.get_embedding_vectors")
+    @patch("app.services.hybrid_search.settings")
+    def test_query_rewriting_merges_variants_via_rrf(
+        self,
+        mock_settings,
+        mock_embed_many,
+        mock_vs_class,
+        mock_bm25,
+        mock_expand,
+    ):
+        """Plusieurs variantes → listes BM25/vector fusionnées par RRF (T2.1)."""
+        mock_settings.retrieval_top_k = 10
+        mock_settings.rrf_k = 60
+        mock_settings.enable_reranking = False
+
+        mock_expand.return_value = ["q original", "q reformulée"]
+        mock_embed_many.return_value = [np.array([0.1] * 8), np.array([0.2] * 8)]
+
+        mock_vs = Mock()
+        mock_vs_class.return_value = mock_vs
+        mock_vs.search.side_effect = [
+            [_vec("A", "a", 0.9)],
+            [_vec("B", "b", 0.8)],
+        ]
+
+        def _bm25_side_effect(organization_id, query, top_k, filters=None, **kwargs):
+            if query == "q original":
+                return [_vec("C", "c", 0.7)]
+            return [_vec("B", "b", 0.99)]
+
+        mock_bm25.search.side_effect = _bm25_side_effect
+
+        results = hybrid_search(organization_id=1, query="q original", top_k=10)
+
+        assert mock_expand.called
+        assert mock_embed_many.called
+        ids = [r["chunk_id"] for r in results]
+        assert ids[0] == "B"
+        assert set(ids) == {"A", "B", "C"}
+
+
+class TestEmbeddingReuse:
+    @patch("app.services.hybrid_search.bm25_search")
+    @patch("app.services.hybrid_search.VectorStore")
+    @patch("app.services.hybrid_search.get_embedding_vector")
+    @patch("app.services.hybrid_search.settings")
+    def test_reuses_provided_query_embedding(
+        self, mock_settings, mock_embed, mock_vs_class, mock_bm25
+    ):
+        mock_settings.retrieval_top_k = 10
+        mock_settings.rrf_k = 60
+        mock_settings.enable_reranking = False
+        mock_settings.enable_hyde = False
+        mock_settings.enable_query_rewriting = False
+
+        mock_embed.side_effect = AssertionError("must not re-embed original query")
+        mock_vs = Mock()
+        mock_vs_class.return_value = mock_vs
+        mock_vs.search.return_value = [_vec("1", "a", 0.5)]
+        mock_bm25.search.return_value = [_vec("1", "a", 0.5)]
+
+        precomputed = np.array([0.1] * 8)
+        hybrid_search(
             organization_id=1,
-            query="test query",
+            query="hello world",
             top_k=5,
-            domain="tech"
+            query_embedding=precomputed,
         )
-        
-        assert results == []
+        mock_embed.assert_not_called()
+
+
+# Import après les helpers pour garder le module léger au collect.
+from app.services.hybrid_search import hybrid_search  # noqa: E402
+from app.services.vector_store import VectorStoreError  # noqa: E402

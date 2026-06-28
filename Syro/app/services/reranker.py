@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 try:
     import numpy as np
 except ImportError:
     np = None
+
+def _normalize_unit(scores: list[float]) -> list[float]:
+    """Min-max vers [0,1] ; ex æquo (ou liste vide) → 1.0."""
+    if not scores:
+        return scores
+    lo, hi = min(scores), max(scores)
+    if hi == lo:
+        return [1.0] * len(scores)
+    return [(s - lo) / (hi - lo) for s in scores]
 
 class Reranker:
     def __init__(self) -> None:
@@ -86,77 +98,41 @@ class Reranker:
             return passages[:top_k] if top_k else passages
         
         try:
-            # Prepare pairs for reranking: (query, passage_text)
+            # FlagReranker.compute_score : float pour une paire, liste/ndarray sinon.
             pairs = [(query, p["text"]) for p in passages]
-            
-            # Get rerank scores using compute_score method
-            # FlagReranker.compute_score can return different formats
-            # For single pair: scalar, for multiple: list/array
-            if len(pairs) == 1:
-                score = model.compute_score(pairs)
-                rerank_scores = [float(score)]
+            raw = model.compute_score(pairs)
+            # Scalaire (1 paire) : float Python, scalaire numpy (np.float32 n'est
+            # PAS sous-classe de float), ou ndarray 0-d → tous itérables-faux.
+            is_scalar = isinstance(raw, (int, float)) or (
+                np is not None
+                and (isinstance(raw, np.generic) or getattr(raw, "ndim", None) == 0)
+            )
+            if is_scalar:
+                rerank_scores = [float(raw)]
             else:
-                rerank_scores = model.compute_score(pairs)
-            
-            # Handle different return types from compute_score
-            if np is not None and isinstance(rerank_scores, np.ndarray):
-                rerank_scores = rerank_scores.tolist()
-            elif isinstance(rerank_scores, (int, float)):
-                # Single score returned for multiple pairs (shouldn't happen but handle it)
-                rerank_scores = [float(rerank_scores)] * len(passages)
-            elif not isinstance(rerank_scores, list):
-                rerank_scores = list(rerank_scores)
-            
-            # Ensure we have the right number of scores
+                rerank_scores = [float(s) for s in raw]
+
+            # Garde-fou : si le modèle ne renvoie pas un score par passage,
+            # on ne peut pas réordonner de façon fiable → ordre d'origine.
             if len(rerank_scores) != len(passages):
-                if len(rerank_scores) == 1 and len(passages) > 1:
-                    # Single score for all - use it
-                    rerank_scores = rerank_scores * len(passages)
-                elif len(rerank_scores) < len(passages):
-                    # Pad with last score or 0
-                    last_score = rerank_scores[-1] if rerank_scores else 0.0
-                    rerank_scores.extend([last_score] * (len(passages) - len(rerank_scores)))
-                elif len(rerank_scores) > len(passages):
-                    # Truncate
-                    rerank_scores = rerank_scores[:len(passages)]
-            
-            # Normalize rerank scores to [0, 1]
-            if rerank_scores:
-                min_score = min(rerank_scores)
-                max_score = max(rerank_scores)
-                if max_score > min_score:
-                    rerank_scores = [(s - min_score) / (max_score - min_score) for s in rerank_scores]
-                else:
-                    rerank_scores = [1.0] * len(rerank_scores)
-            
-            # Update passages with rerank scores
-            reranked = []
-            for i, passage in enumerate(passages):
-                rerank_score = float(rerank_scores[i]) if i < len(rerank_scores) else 0.0
-                original_score = passage.get("score", 0.0)
-                
-                # Combine original hybrid score with rerank score
-                rerank_weight = settings.rerank_weight
-                final_score = (
-                    original_score * (1 - rerank_weight) +
-                    rerank_score * rerank_weight
-                )
-                
-                reranked.append({
+                return passages[:top_k] if top_k else passages
+
+            rerank_scores = _normalize_unit(rerank_scores)
+
+            w = settings.rerank_weight
+            reranked = [
+                {
                     **passage,
-                    "rerank_score": rerank_score,
-                    "final_score": final_score,
-                })
-            
-            # Sort by final score
+                    "rerank_score": rerank_scores[i],
+                    "final_score": passage.get("score", 0.0) * (1 - w) + rerank_scores[i] * w,
+                }
+                for i, passage in enumerate(passages)
+            ]
             reranked.sort(key=lambda x: x["final_score"], reverse=True)
-            
-            # Return top_k
-            if top_k:
-                return reranked[:top_k]
-            return reranked
-            
-        except Exception:
+            return reranked[:top_k] if top_k else reranked
+
+        except Exception as exc:
+            logger.warning("Reranking failed, returning original order: %s", exc)
             return passages[:top_k] if top_k else passages
 
 # Global instance

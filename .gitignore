@@ -123,3 +123,7 @@ yarn-error.log*
 # Archive folders
 archive/
 ancien/
+
+# Generated artifacts (graph reports, wrapper backups)
+**/graphify-out/
+.claude-wrapper-backup/

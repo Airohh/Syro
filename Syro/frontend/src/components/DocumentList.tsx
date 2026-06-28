@@ -157,6 +157,11 @@ export default function DocumentList({ onRefresh, currentDomain = 'general' }: D
                               {domainConfig.name}
                             </span>
                           )}
+                          {doc.source_type && (
+                            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs uppercase">
+                              {doc.source_type}
+                            </span>
+                          )}
                           <span
                             className={`px-2 py-1 rounded text-xs ${getStatusColor(
                               doc.ingestion_status
