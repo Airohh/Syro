@@ -43,3 +43,15 @@ class TestValidatorCatchesProblems:
         ]
         errors = vgs.validate_dataset(bad, set())
         assert any("dupliquée" in e for e in errors)
+
+    def test_flags_missing_intent(self):
+        bad = [
+            {
+                "question": "q",
+                "ground_truth": "a",
+                "domain": "tech",
+                "relevant_doc_ids": ["01-rag-fundamentals.md"],
+            }
+        ]
+        errors = vgs.validate_dataset(bad, {"01-rag-fundamentals.md"})
+        assert any("intent manquant" in e for e in errors)

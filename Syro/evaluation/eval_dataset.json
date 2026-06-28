@@ -2,102 +2,182 @@
   {
     "domain": "tech",
     "question": "Qu'est-ce que le RAG (Retrieval-Augmented Generation) et quels sont ses avantages par rapport à un LLM seul ?",
-    "ground_truth": "Le RAG est une architecture qui combine la recherche documentaire et la génération de texte. Un LLM classique répond uniquement depuis ses paramètres entraînés, tandis que le RAG récupère d'abord des passages pertinents depuis une base de connaissances externe, puis les fournit comme contexte au LLM pour générer la réponse. Les avantages incluent : des réponses ancrées dans des sources vérifiables, la possibilité de mettre à jour la base de connaissances sans réentraîner le modèle, et une réduction des hallucinations."
+    "ground_truth": "Le RAG est une architecture qui combine la recherche documentaire et la génération de texte. Un LLM classique répond uniquement depuis ses paramètres entraînés, tandis que le RAG récupère d'abord des passages pertinents depuis une base de connaissances externe, puis les fournit comme contexte au LLM pour générer la réponse. Les avantages incluent : des réponses ancrées dans des sources vérifiables, la possibilité de mettre à jour la base de connaissances sans réentraîner le modèle, et une réduction des hallucinations.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "01-rag-fundamentals.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Quelle est la différence entre la recherche vectorielle et la recherche BM25 ?",
-    "ground_truth": "La recherche vectorielle (ou sémantique) encode les textes en vecteurs denses via un modèle d'embedding et mesure la similarité cosinus entre la requête et les documents. Elle capture le sens et les synonymes mais peut manquer des mots-clés exacts. BM25 est un algorithme lexical basé sur la fréquence des termes (TF-IDF amélioré) : il trouve les documents contenant les mots exacts de la requête. La recherche hybride combine les deux pour bénéficier de la précision sémantique et de la précision lexicale."
+    "ground_truth": "La recherche vectorielle (ou sémantique) encode les textes en vecteurs denses via un modèle d'embedding et mesure la similarité cosinus entre la requête et les documents. Elle capture le sens et les synonymes mais peut manquer des mots-clés exacts. BM25 est un algorithme lexical basé sur la fréquence des termes (TF-IDF amélioré) : il trouve les documents contenant les mots exacts de la requête. La recherche hybride combine les deux pour bénéficier de la précision sémantique et de la précision lexicale.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "02-recherche-vectorielle-bm25.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Comment fonctionne le chunking hiérarchique de documents ?",
-    "ground_truth": "Le chunking hiérarchique découpe les documents en respectant leur structure naturelle (titres, sections, paragraphes) plutôt qu'en coupant arbitrairement à un nombre fixe de tokens. Il identifie les marqueurs structurels (balises Markdown, HTML, niveaux de titre) pour délimiter les chunks de façon cohérente. Un overlap entre chunks consécutifs préserve le contexte aux frontières. Cette approche améliore la qualité des chunks récupérés car chaque chunk correspond à une unité sémantique logique du document."
+    "ground_truth": "Le chunking hiérarchique découpe les documents en respectant leur structure naturelle (titres, sections, paragraphes) plutôt qu'en coupant arbitrairement à un nombre fixe de tokens. Il identifie les marqueurs structurels (balises Markdown, HTML, niveaux de titre) pour délimiter les chunks de façon cohérente. Un overlap entre chunks consécutifs préserve le contexte aux frontières. Cette approche améliore la qualité des chunks récupérés car chaque chunk correspond à une unité sémantique logique du document.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "03-chunking-hierarchique.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Qu'est-ce que le reranking dans un pipeline RAG et pourquoi est-il utile ?",
-    "ground_truth": "Le reranking est une étape post-retrieval qui réordonne les chunks récupérés selon leur pertinence réelle par rapport à la requête. On récupère d'abord un nombre élevé de candidats (top-k large), puis un modèle cross-encoder (comme FlagEmbedding BGE-Reranker) calcule un score de pertinence plus précis pour chaque paire (requête, chunk). Le reranking améliore la précision car les modèles d'embedding bi-encoder sont rapides mais moins précis que les cross-encoders, qui voient les deux textes simultanément."
+    "ground_truth": "Le reranking est une étape post-retrieval qui réordonne les chunks récupérés selon leur pertinence réelle par rapport à la requête. On récupère d'abord un nombre élevé de candidats (top-k large), puis un modèle cross-encoder (comme FlagEmbedding BGE-Reranker) calcule un score de pertinence plus précis pour chaque paire (requête, chunk). Le reranking améliore la précision car les modèles d'embedding bi-encoder sont rapides mais moins précis que les cross-encoders, qui voient les deux textes simultanément.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "04-reranking.md"
+    ]
   },
   {
     "domain": "mlops",
     "question": "Qu'est-ce que MLflow et à quoi sert-il dans un projet de machine learning ?",
-    "ground_truth": "MLflow est une plateforme open-source pour gérer le cycle de vie des modèles ML. Il permet de : (1) tracker les expériences (paramètres, métriques, artefacts) avec MLflow Tracking ; (2) packager le code ML de façon reproductible avec MLflow Projects ; (3) déployer des modèles en production avec MLflow Models ; (4) gérer les versions de modèles avec le Model Registry. C'est un outil central pour la reproductibilité et la traçabilité des expériences en MLOps."
+    "ground_truth": "MLflow est une plateforme open-source pour gérer le cycle de vie des modèles ML. Il permet de : (1) tracker les expériences (paramètres, métriques, artefacts) avec MLflow Tracking ; (2) packager le code ML de façon reproductible avec MLflow Projects ; (3) déployer des modèles en production avec MLflow Models ; (4) gérer les versions de modèles avec le Model Registry. C'est un outil central pour la reproductibilité et la traçabilité des expériences en MLOps.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "01-mlflow.md"
+    ]
   },
   {
     "domain": "mlops",
     "question": "Quels sont les principaux indicateurs de performance (KPIs) à surveiller pour un modèle en production ?",
-    "ground_truth": "Les KPIs clés pour un modèle en production incluent : la dérive des données (data drift) qui mesure si la distribution des entrées change par rapport à l'entraînement, la dérive des concepts (concept drift) qui détecte si la relation entrée-sortie évolue, les métriques métier (précision, rappel, F1 selon le cas d'usage), la latence des prédictions, le taux d'erreur des appels API, et la consommation de ressources (CPU, mémoire). Un monitoring robuste permet de détecter rapidement les régressions de performance."
+    "ground_truth": "Les KPIs clés pour un modèle en production incluent : la dérive des données (data drift) qui mesure si la distribution des entrées change par rapport à l'entraînement, la dérive des concepts (concept drift) qui détecte si la relation entrée-sortie évolue, les métriques métier (précision, rappel, F1 selon le cas d'usage), la latence des prédictions, le taux d'erreur des appels API, et la consommation de ressources (CPU, mémoire). Un monitoring robuste permet de détecter rapidement les régressions de performance.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "02-kpis-production.md"
+    ]
   },
   {
     "domain": "mlops",
     "question": "Qu'est-ce que Celery et comment s'intègre-t-il dans une architecture RAG asynchrone ?",
-    "ground_truth": "Celery est un système de traitement de tâches asynchrones distribué pour Python. Dans une architecture RAG, il permet d'exécuter des tâches longues (ingestion de documents, génération d'embeddings, indexation Qdrant) en arrière-plan sans bloquer les requêtes HTTP. Les tâches sont envoyées dans une file d'attente (Redis ou RabbitMQ comme broker), des workers Celery les consomment et les exécutent. L'utilisateur reçoit une réponse immédiate et peut consulter le statut de la tâche asynchronement."
+    "ground_truth": "Celery est un système de traitement de tâches asynchrones distribué pour Python. Dans une architecture RAG, il permet d'exécuter des tâches longues (ingestion de documents, génération d'embeddings, indexation Qdrant) en arrière-plan sans bloquer les requêtes HTTP. Les tâches sont envoyées dans une file d'attente (Redis ou RabbitMQ comme broker), des workers Celery les consomment et les exécutent. L'utilisateur reçoit une réponse immédiate et peut consulter le statut de la tâche asynchronement.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "05-celery-rag-async.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Comment fonctionne l'authentification JWT dans une API FastAPI ?",
-    "ground_truth": "JWT (JSON Web Token) est un standard de token signé contenant des claims (informations). Dans FastAPI : lors du login, l'utilisateur envoie ses credentials, le serveur vérifie et génère un JWT signé avec une clé secrète (HS256 ou RS256) contenant l'ID utilisateur et la date d'expiration. Le token est renvoyé au client qui le stocke et l'inclut dans chaque requête via le header Authorization: Bearer <token>. FastAPI vérifie la signature et l'expiration à chaque endpoint protégé via une dépendance (Depends)."
+    "ground_truth": "JWT (JSON Web Token) est un standard de token signé contenant des claims (informations). Dans FastAPI : lors du login, l'utilisateur envoie ses credentials, le serveur vérifie et génère un JWT signé avec une clé secrète (HS256 ou RS256) contenant l'ID utilisateur et la date d'expiration. Le token est renvoyé au client qui le stocke et l'inclut dans chaque requête via le header Authorization: Bearer <token>. FastAPI vérifie la signature et l'expiration à chaque endpoint protégé via une dépendance (Depends).",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "07-fastapi-jwt-auth.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Qu'est-ce que Qdrant et pourquoi l'utiliser comme base de données vectorielle ?",
-    "ground_truth": "Qdrant est une base de données vectorielle open-source optimisée pour la recherche par similarité à grande échelle. Elle stocke des vecteurs denses (embeddings) et permet une recherche ANN (Approximate Nearest Neighbors) très rapide. Ses avantages : support du filtrage combiné sur les métadonnées et les vecteurs (payload filtering), support multi-collection (par domaine), API REST et gRPC, déploiement Docker simple, haute performance même sur des millions de vecteurs. Comparé à FAISS (in-memory uniquement), Qdrant persiste les données et supporte nativement les mises à jour."
+    "ground_truth": "Qdrant est une base de données vectorielle open-source optimisée pour la recherche par similarité à grande échelle. Elle stocke des vecteurs denses (embeddings) et permet une recherche ANN (Approximate Nearest Neighbors) très rapide. Ses avantages : support du filtrage combiné sur les métadonnées et les vecteurs (payload filtering), support multi-collection (par domaine), API REST et gRPC, déploiement Docker simple, haute performance même sur des millions de vecteurs. Comparé à FAISS (in-memory uniquement), Qdrant persiste les données et supporte nativement les mises à jour.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "06-qdrant.md"
+    ]
   },
   {
     "domain": "mlops",
     "question": "Quelles sont les métriques RAGAS et que mesurent-elles exactement ?",
-    "ground_truth": "RAGAS évalue un pipeline RAG avec 4 métriques principales : (1) Faithfulness — mesure si la réponse est factuellement ancrée dans les contextes récupérés (pas d'hallucination) ; (2) Answer Relevancy — mesure si la réponse répond bien à la question posée ; (3) Context Recall — mesure si les contextes récupérés couvrent les informations nécessaires pour répondre (comparé à la ground truth) ; (4) Context Precision — mesure si les contextes récupérés sont pertinents (signal/bruit). Toutes les métriques sont entre 0 et 1, 1 étant le score parfait."
+    "ground_truth": "RAGAS évalue un pipeline RAG avec 4 métriques principales : (1) Faithfulness — mesure si la réponse est factuellement ancrée dans les contextes récupérés (pas d'hallucination) ; (2) Answer Relevancy — mesure si la réponse répond bien à la question posée ; (3) Context Recall — mesure si les contextes récupérés couvrent les informations nécessaires pour répondre (comparé à la ground truth) ; (4) Context Precision — mesure si les contextes récupérés sont pertinents (signal/bruit). Toutes les métriques sont entre 0 et 1, 1 étant le score parfait.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "06-metriques-ragas.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Comment mettre en place un rate limiter dans une API FastAPI ?",
-    "ground_truth": "Un rate limiter dans FastAPI peut être implémenté via un middleware ou une dépendance. L'approche courante utilise Redis pour compter les requêtes par IP/utilisateur sur une fenêtre glissante. On définit une limite (ex: 100 requêtes/minute), on incrémente un compteur en Redis pour chaque requête, et on retourne HTTP 429 Too Many Requests si la limite est dépassée. Des librairies comme slowapi (basée sur limits) simplifient l'intégration. Le rate limiting protège contre les abus et les attaques DoS."
+    "ground_truth": "Un rate limiter dans FastAPI peut être implémenté via un middleware ou une dépendance. L'approche courante utilise Redis pour compter les requêtes par IP/utilisateur sur une fenêtre glissante. On définit une limite (ex: 100 requêtes/minute), on incrémente un compteur en Redis pour chaque requête, et on retourne HTTP 429 Too Many Requests si la limite est dépassée. Des librairies comme slowapi (basée sur limits) simplifient l'intégration. Le rate limiting protège contre les abus et les attaques DoS.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "08-rate-limiting-fastapi.md"
+    ]
   },
   {
     "domain": "mlops",
     "question": "Qu'est-ce que l'observabilité dans un système RAG en production et comment la mettre en place ?",
-    "ground_truth": "L'observabilité d'un système RAG repose sur trois piliers : (1) les logs — enregistrement structuré (JSON) de chaque requête, question, temps de traitement, nombre de chunks récupérés, modèle utilisé ; (2) les métriques — compteurs et histogrammes Prometheus (latence, throughput, taux d'erreur) exposés via /metrics et visualisés dans Grafana ; (3) le tracing distribué — OpenTelemetry trace chaque requête à travers les microservices. En RAG, on monitore aussi la qualité des réponses (scores de confiance, longueur des réponses, fallback rate)."
+    "ground_truth": "L'observabilité d'un système RAG repose sur trois piliers : (1) les logs — enregistrement structuré (JSON) de chaque requête, question, temps de traitement, nombre de chunks récupérés, modèle utilisé ; (2) les métriques — compteurs et histogrammes Prometheus (latence, throughput, taux d'erreur) exposés via /metrics et visualisés dans Grafana ; (3) le tracing distribué — OpenTelemetry trace chaque requête à travers les microservices. En RAG, on monitore aussi la qualité des réponses (scores de confiance, longueur des réponses, fallback rate).",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "03-observabilite-rag.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Quelle est la différence entre un embedding bi-encoder et un cross-encoder ?",
-    "ground_truth": "Un bi-encoder encode la requête et chaque document indépendamment en vecteurs denses, puis calcule la similarité cosinus. C'est très rapide car les vecteurs de documents peuvent être précalculés. Un cross-encoder prend la paire (requête, document) concaténée en entrée et produit un score de pertinence en une seule passe — il voit les deux textes simultanément. Le cross-encoder est bien plus précis mais beaucoup plus lent (pas de précalcul possible). En RAG, le bi-encoder est utilisé pour la retrieval initiale, le cross-encoder pour le reranking d'un sous-ensemble de candidats."
+    "ground_truth": "Un bi-encoder encode la requête et chaque document indépendamment en vecteurs denses, puis calcule la similarité cosinus. C'est très rapide car les vecteurs de documents peuvent être précalculés. Un cross-encoder prend la paire (requête, document) concaténée en entrée et produit un score de pertinence en une seule passe — il voit les deux textes simultanément. Le cross-encoder est bien plus précis mais beaucoup plus lent (pas de précalcul possible). En RAG, le bi-encoder est utilisé pour la retrieval initiale, le cross-encoder pour le reranking d'un sous-ensemble de candidats.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "05-bi-encoder-cross-encoder.md"
+    ]
   },
   {
     "domain": "mlops",
     "question": "Comment détecter et gérer le data drift dans un pipeline de production ?",
-    "ground_truth": "La détection du data drift compare la distribution statistique des données de production à la distribution de référence (entraînement). Les méthodes incluent : test KS (Kolmogorov-Smirnov) pour les variables continues, test du chi-carré pour les catégorielles, distance de Wasserstein, ou PSI (Population Stability Index). Des outils comme Evidently AI ou whylogs automatisent cette surveillance. Quand un drift est détecté au-delà d'un seuil, on peut déclencher une alerte, un réentraînement automatique du modèle, ou une escalade vers une revue humaine."
+    "ground_truth": "La détection du data drift compare la distribution statistique des données de production à la distribution de référence (entraînement). Les méthodes incluent : test KS (Kolmogorov-Smirnov) pour les variables continues, test du chi-carré pour les catégorielles, distance de Wasserstein, ou PSI (Population Stability Index). Des outils comme Evidently AI ou whylogs automatisent cette surveillance. Quand un drift est détecté au-delà d'un seuil, on peut déclencher une alerte, un réentraînement automatique du modèle, ou une escalade vers une revue humaine.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "04-data-drift.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Quels sont les avantages de FastAPI par rapport à Flask pour construire une API REST ?",
-    "ground_truth": "FastAPI offre plusieurs avantages sur Flask : (1) typage fort via Pydantic pour la validation automatique des requêtes/réponses ; (2) documentation OpenAPI/Swagger générée automatiquement ; (3) support natif de l'asynchrone (async/await) sans configuration supplémentaire ; (4) performances supérieures grâce à Starlette (ASGI) ; (5) injection de dépendances intégrée (Depends) ; (6) validation automatique des paramètres path, query et body. Flask est plus simple et flexible pour les petits projets, FastAPI est recommandé pour les APIs production avec validation stricte."
+    "ground_truth": "FastAPI offre plusieurs avantages sur Flask : (1) typage fort via Pydantic pour la validation automatique des requêtes/réponses ; (2) documentation OpenAPI/Swagger générée automatiquement ; (3) support natif de l'asynchrone (async/await) sans configuration supplémentaire ; (4) performances supérieures grâce à Starlette (ASGI) ; (5) injection de dépendances intégrée (Depends) ; (6) validation automatique des paramètres path, query et body. Flask est plus simple et flexible pour les petits projets, FastAPI est recommandé pour les APIs production avec validation stricte.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "09-fastapi-vs-flask.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Comment fonctionne Docker Compose pour orchestrer un stack multi-services ?",
-    "ground_truth": "Docker Compose définit un stack multi-conteneurs dans un fichier YAML (docker-compose.yml). Chaque service correspond à un conteneur avec son image, ses variables d'environnement, ses volumes, ses ports exposés et ses dépendances (depends_on). La commande 'docker-compose up' démarre tous les services dans le bon ordre, crée un réseau interne pour la communication inter-services, et gère le cycle de vie. Les volumes permettent la persistance des données. Docker Compose est idéal pour le développement local et les déploiements simples, tandis que Kubernetes est préféré pour la production à grande échelle."
+    "ground_truth": "Docker Compose définit un stack multi-conteneurs dans un fichier YAML (docker-compose.yml). Chaque service correspond à un conteneur avec son image, ses variables d'environnement, ses volumes, ses ports exposés et ses dépendances (depends_on). La commande 'docker-compose up' démarre tous les services dans le bon ordre, crée un réseau interne pour la communication inter-services, et gère le cycle de vie. Les volumes permettent la persistance des données. Docker Compose est idéal pour le développement local et les déploiements simples, tandis que Kubernetes est préféré pour la production à grande échelle.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "11-docker-compose.md"
+    ]
   },
   {
     "domain": "mlops",
     "question": "Qu'est-ce que le model serving et quelles sont les options pour déployer un modèle ML en production ?",
-    "ground_truth": "Le model serving est l'exposition d'un modèle entraîné via une API pour des prédictions en temps réel ou en batch. Les options principales : (1) API FastAPI/Flask custom — simple, contrôle total ; (2) MLflow Model Serving — déploiement en une commande via mlflow models serve ; (3) BentoML — framework dédié avec packaging et scaling ; (4) TorchServe/TensorFlow Serving — optimisés pour les modèles PyTorch/TF ; (5) solutions cloud (AWS SageMaker, GCP Vertex AI, Azure ML) — gestion infrastructure déléguée. Le choix dépend du volume de requêtes, des contraintes de latence et de l'infrastructure disponible."
+    "ground_truth": "Le model serving est l'exposition d'un modèle entraîné via une API pour des prédictions en temps réel ou en batch. Les options principales : (1) API FastAPI/Flask custom — simple, contrôle total ; (2) MLflow Model Serving — déploiement en une commande via mlflow models serve ; (3) BentoML — framework dédié avec packaging et scaling ; (4) TorchServe/TensorFlow Serving — optimisés pour les modèles PyTorch/TF ; (5) solutions cloud (AWS SageMaker, GCP Vertex AI, Azure ML) — gestion infrastructure déléguée. Le choix dépend du volume de requêtes, des contraintes de latence et de l'infrastructure disponible.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "08-model-serving.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Comment implémenter une recherche sémantique avec sentence-transformers ?",
-    "ground_truth": "Avec sentence-transformers, on charge un modèle pré-entraîné (ex: all-MiniLM-L6-v2 ou nomic-embed-text) via SentenceTransformer('model_name'). On encode les documents avec model.encode(documents) qui retourne une matrice de vecteurs. Pour une requête, on encode la question, puis on calcule la similarité cosinus avec cos_sim(query_embedding, doc_embeddings). Les documents les plus similaires sont triés par score décroissant. Pour la production, on stocke les embeddings précalculés dans une base vectorielle (Qdrant, Faiss) plutôt que de les recalculer à chaque requête."
+    "ground_truth": "Avec sentence-transformers, on charge un modèle pré-entraîné (ex: all-MiniLM-L6-v2 ou nomic-embed-text) via SentenceTransformer('model_name'). On encode les documents avec model.encode(documents) qui retourne une matrice de vecteurs. Pour une requête, on encode la question, puis on calcule la similarité cosinus avec cos_sim(query_embedding, doc_embeddings). Les documents les plus similaires sont triés par score décroissant. Pour la production, on stocke les embeddings précalculés dans une base vectorielle (Qdrant, Faiss) plutôt que de les recalculer à chaque requête.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "02-recherche-vectorielle-bm25.md"
+    ]
   },
   {
     "domain": "tech",
     "question": "Quelles sont les bonnes pratiques pour sécuriser une API REST exposée publiquement ?",
-    "ground_truth": "Les bonnes pratiques de sécurité pour une API REST incluent : authentification forte (JWT, OAuth2, API keys) ; HTTPS obligatoire avec TLS 1.2+ ; rate limiting pour prévenir les abus ; validation stricte de toutes les entrées (injection SQL, XSS, path traversal) ; headers de sécurité HTTP (CORS restrictif, Content-Security-Policy, X-Frame-Options) ; logs d'audit des accès ; principe du moindre privilège (RBAC) ; gestion sécurisée des secrets (variables d'environnement, Vault) ; mise à jour régulière des dépendances ; scan de vulnérabilités automatisé en CI/CD."
+    "ground_truth": "Les bonnes pratiques de sécurité pour une API REST incluent : authentification forte (JWT, OAuth2, API keys) ; HTTPS obligatoire avec TLS 1.2+ ; rate limiting pour prévenir les abus ; validation stricte de toutes les entrées (injection SQL, XSS, path traversal) ; headers de sécurité HTTP (CORS restrictif, Content-Security-Policy, X-Frame-Options) ; logs d'audit des accès ; principe du moindre privilège (RBAC) ; gestion sécurisée des secrets (variables d'environnement, Vault) ; mise à jour régulière des dépendances ; scan de vulnérabilités automatisé en CI/CD.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "10-securite-api-rest.md"
+    ]
   },
   {
     "domain": "mlops",
     "question": "Comment évaluer la qualité d'un pipeline RAG sans RAGAS ?",
-    "ground_truth": "Sans RAGAS, on peut évaluer un pipeline RAG avec : (1) évaluation humaine — des annotateurs notent la pertinence et la fidélité des réponses sur un dataset de référence ; (2) métriques NLP classiques — BLEU, ROUGE, BERTScore comparent les réponses générées aux réponses de référence ; (3) métriques de retrieval — MRR (Mean Reciprocal Rank), NDCG, Hit@K mesurent si les bons documents sont récupérés ; (4) LLM-as-a-judge — un LLM puissant (GPT-4) note automatiquement la qualité des réponses selon des critères définis. Ces méthodes sont complémentaires et adressent des aspects différents de la qualité."
+    "ground_truth": "Sans RAGAS, on peut évaluer un pipeline RAG avec : (1) évaluation humaine — des annotateurs notent la pertinence et la fidélité des réponses sur un dataset de référence ; (2) métriques NLP classiques — BLEU, ROUGE, BERTScore comparent les réponses générées aux réponses de référence ; (3) métriques de retrieval — MRR (Mean Reciprocal Rank), NDCG, Hit@K mesurent si les bons documents sont récupérés ; (4) LLM-as-a-judge — un LLM puissant (GPT-4) note automatiquement la qualité des réponses selon des critères définis. Ces méthodes sont complémentaires et adressent des aspects différents de la qualité.",
+    "intent": "factual_lookup",
+    "relevant_doc_ids": [
+      "07-evaluer-rag-sans-ragas.md"
+    ]
   },
   {
     "domain": "tech",

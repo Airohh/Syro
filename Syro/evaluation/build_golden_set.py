@@ -44,6 +44,10 @@ def _e(domain, intent, question, ground_truth, docs):
     }
 
 
+def _norm(q: str) -> str:
+    return " ".join(q.lower().split())
+
+
 NEW_ENTRIES: list[dict] = [
     # ---------- tech/01 RAG fundamentals ----------
     _e("tech", "factual_lookup", "Quelles sont les trois étapes du pipeline RAG ?",
@@ -309,13 +313,89 @@ NEW_ENTRIES: list[dict] = [
 ]
 
 
-def _norm(q: str) -> str:
-    return " ".join(q.lower().split())
+# 20 paires historiques (pré-T1.1) sans intent / relevant_doc_ids — backfill DA.
+LEGACY_BACKFILL: dict[str, dict] = {
+    _norm(
+        "Qu'est-ce que le RAG (Retrieval-Augmented Generation) et quels sont ses avantages par rapport à un LLM seul ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["01-rag-fundamentals.md"]},
+    _norm(
+        "Quelle est la différence entre la recherche vectorielle et la recherche BM25 ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["02-recherche-vectorielle-bm25.md"]},
+    _norm("Comment fonctionne le chunking hiérarchique de documents ?"): {
+        "intent": "factual_lookup",
+        "relevant_doc_ids": ["03-chunking-hierarchique.md"],
+    },
+    _norm(
+        "Qu'est-ce que le reranking dans un pipeline RAG et pourquoi est-il utile ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["04-reranking.md"]},
+    _norm(
+        "Qu'est-ce que MLflow et à quoi sert-il dans un projet de machine learning ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["01-mlflow.md"]},
+    _norm(
+        "Quels sont les principaux indicateurs de performance (KPIs) à surveiller pour un modèle en production ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["02-kpis-production.md"]},
+    _norm(
+        "Qu'est-ce que Celery et comment s'intègre-t-il dans une architecture RAG asynchrone ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["05-celery-rag-async.md"]},
+    _norm("Comment fonctionne l'authentification JWT dans une API FastAPI ?"): {
+        "intent": "factual_lookup",
+        "relevant_doc_ids": ["07-fastapi-jwt-auth.md"],
+    },
+    _norm(
+        "Qu'est-ce que Qdrant et pourquoi l'utiliser comme base de données vectorielle ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["06-qdrant.md"]},
+    _norm("Quelles sont les métriques RAGAS et que mesurent-elles exactement ?"): {
+        "intent": "factual_lookup",
+        "relevant_doc_ids": ["06-metriques-ragas.md"],
+    },
+    _norm("Comment mettre en place un rate limiter dans une API FastAPI ?"): {
+        "intent": "factual_lookup",
+        "relevant_doc_ids": ["08-rate-limiting-fastapi.md"],
+    },
+    _norm(
+        "Qu'est-ce que l'observabilité dans un système RAG en production et comment la mettre en place ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["03-observabilite-rag.md"]},
+    _norm(
+        "Quelle est la différence entre un embedding bi-encoder et un cross-encoder ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["05-bi-encoder-cross-encoder.md"]},
+    _norm(
+        "Comment détecter et gérer le data drift dans un pipeline de production ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["04-data-drift.md"]},
+    _norm(
+        "Quels sont les avantages de FastAPI par rapport à Flask pour construire une API REST ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["09-fastapi-vs-flask.md"]},
+    _norm(
+        "Comment fonctionne Docker Compose pour orchestrer un stack multi-services ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["11-docker-compose.md"]},
+    _norm(
+        "Qu'est-ce que le model serving et quelles sont les options pour déployer un modèle ML en production ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["08-model-serving.md"]},
+    _norm(
+        "Comment implémenter une recherche sémantique avec sentence-transformers ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["02-recherche-vectorielle-bm25.md"]},
+    _norm(
+        "Quelles sont les bonnes pratiques pour sécuriser une API REST exposée publiquement ?"
+    ): {"intent": "factual_lookup", "relevant_doc_ids": ["10-securite-api-rest.md"]},
+    _norm("Comment évaluer la qualité d'un pipeline RAG sans RAGAS ?"): {
+        "intent": "factual_lookup",
+        "relevant_doc_ids": ["07-evaluer-rag-sans-ragas.md"],
+    },
+}
 
 
 def main() -> None:
     existing = json.loads(DATASET_PATH.read_text(encoding="utf-8")) if DATASET_PATH.exists() else []
     seen = {_norm(item["question"]) for item in existing}
+
+    backfilled = 0
+    for item in existing:
+        patch = LEGACY_BACKFILL.get(_norm(item["question"]))
+        if not patch:
+            continue
+        for field in ("intent", "relevant_doc_ids"):
+            if item.get(field) is None:
+                item[field] = patch[field]
+                backfilled += 1
 
     bad = [e["intent"] for e in NEW_ENTRIES if e["intent"] not in INTENTS]
     if bad:
@@ -334,7 +414,7 @@ def main() -> None:
     )
 
     with_ids = sum(1 for e in existing if e.get("relevant_doc_ids"))
-    print(f"Golden set: {len(existing)} paires (+{added} ajoutées)")
+    print(f"Golden set: {len(existing)} paires (+{added} ajoutées, {backfilled} champs backfill legacy)")
     print(f"  avec relevant_doc_ids: {with_ids}")
     from collections import Counter
     print(f"  intents: {dict(Counter(e.get('intent', 'unlabeled') for e in existing))}")

@@ -56,7 +56,9 @@ def validate_dataset(dataset: list[dict], corpus: set[str]) -> list[str]:
         seen.add(norm)
 
         intent = item.get("intent")
-        if intent is not None:
+        if intent is None:
+            errors.append(f"{tag}: intent manquant")
+        else:
             buckets.add(intent)
             if intent not in VALID_INTENTS:
                 errors.append(f"{tag}: intent invalide {intent!r}")
@@ -66,9 +68,13 @@ def validate_dataset(dataset: list[dict], corpus: set[str]) -> list[str]:
             if intent == "out_of_corpus":
                 if ids:
                     errors.append(f"{tag}: out_of_corpus doit avoir relevant_doc_ids vide")
+            elif intent is not None and not ids:
+                errors.append(f"{tag}: relevant_doc_ids vide pour intent {intent!r}")
             for doc in ids:
                 if doc not in corpus:
                     errors.append(f"{tag}: relevant_doc_id absent du corpus: {doc}")
+        elif intent is not None and intent != "out_of_corpus":
+            errors.append(f"{tag}: relevant_doc_ids manquant")
 
     if len(dataset) < MIN_PAIRS:
         errors.append(f"taille golden set {len(dataset)} < {MIN_PAIRS}")
