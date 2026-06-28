@@ -143,11 +143,42 @@ def _is_markdown_table_block(text: str) -> bool:
     return all(ln.startswith("|") and ln.endswith("|") for ln in lines[:2])
 
 
+def _split_markdown_table(text: str, chunk_size: int) -> list[str]:
+    """Découpe un tableau Markdown en blocs avec en-tête répété."""
+    lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return [text]
+
+    header, separator = lines[0], lines[1]
+    data_rows = lines[2:]
+    if not data_rows:
+        return [text]
+
+    chunks: list[str] = []
+    current = [header, separator]
+    current_tokens = count_tokens("\n".join(current))
+
+    for row in data_rows:
+        row_tokens = count_tokens(row)
+        if len(current) > 2 and current_tokens + row_tokens > chunk_size:
+            chunks.append("\n".join(current))
+            current = [header, separator, row]
+            current_tokens = count_tokens("\n".join(current))
+        else:
+            current.append(row)
+            current_tokens += row_tokens
+
+    if len(current) > 2:
+        chunks.append("\n".join(current))
+    return chunks or [text]
+
+
 def _split_large_section(text: str, chunk_size: int, overlap: int) -> list[str]:
     """Découpe une section longue en préservant les blocs tableau Markdown."""
     if _is_markdown_table_block(text):
         if count_tokens(text) <= chunk_size:
             return [text]
+        return _split_markdown_table(text, chunk_size)
     if "|" in text and "---" in text:
         blocks = re.split(r"\n\n+", text)
         chunks: list[str] = []
@@ -156,7 +187,10 @@ def _split_large_section(text: str, chunk_size: int, overlap: int) -> list[str]:
             if not block:
                 continue
             if _is_markdown_table_block(block):
-                chunks.append(block)
+                if count_tokens(block) <= chunk_size:
+                    chunks.append(block)
+                else:
+                    chunks.extend(_split_markdown_table(block, chunk_size))
             else:
                 chunks.extend(_split_large_section_words(block, chunk_size, overlap))
         return chunks or [text]
@@ -172,11 +206,11 @@ def _split_large_section_words(text: str, chunk_size: int, overlap: int) -> list
         end = min(len(words), start + chunk_size)
         chunk_text = " ".join(words[start:end])
         chunks.append(chunk_text)
+        if end >= len(words):
+            break
         start = end - overlap
         if start < 0:
             start = 0
-        if start >= len(words):
-            break
     
     return chunks
 
@@ -196,11 +230,11 @@ def _chunk_simple(text: str, chunk_size: int, overlap: int) -> list[dict[str, An
             "level": 0,
         })
         index += 1
+        if end >= len(words):
+            break
         start = end - overlap
         if start < 0:
             start = 0
-        if start >= len(words):
-            break
     
     return chunks
 

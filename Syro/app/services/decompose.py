@@ -187,6 +187,18 @@ def retrieve_decomposed(
     logger.info("Query decomposition: %d subqueries for %r", len(subqueries), query[:80])
 
     def _search_one(subquery: str) -> list[dict[str, Any]]:
+        if settings.enable_crag:
+            from .crag import retrieve_with_crag
+
+            return retrieve_with_crag(
+                organization_id=organization_id,
+                query=subquery,
+                top_k=per_sub_k,
+                filters=filters,
+                domain=domain,
+                history=history,
+                allowed_document_ids=allowed_document_ids,
+            )
         return hybrid_search(
             organization_id=organization_id,
             query=subquery,

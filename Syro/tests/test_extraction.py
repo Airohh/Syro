@@ -60,6 +60,34 @@ class TestTableExtraction:
         assert "0.85" in out
         assert "| Metric | Value |" in out
 
+    def test_docx_preserves_block_order(self):
+        doc = Document()
+        doc.add_paragraph("Before table")
+        table = doc.add_table(rows=1, cols=1)
+        table.cell(0, 0).text = "Cell"
+        doc.add_paragraph("After table")
+        buf = io.BytesIO()
+        doc.save(buf)
+
+        out = extract_text_from_bytes(
+            buf.getvalue(),
+            "ordered.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        assert out.index("Before table") < out.index("Cell") < out.index("After table")
+
+    def test_chunker_splits_oversized_markdown_table(self):
+        header = "| Col1 | Col2 |"
+        sep = "| --- | --- |"
+        rows = "\n".join(f"| r{i} | v{i} |" for i in range(80))
+        text = f"Intro\n\n{header}\n{sep}\n{rows}\n\nFin"
+        chunks = chunk_text_hierarchical(text, chunk_size=50, overlap=10)
+        table_chunks = [c for c in chunks if "| Col1 |" in c["text"]]
+        assert len(table_chunks) >= 2
+        for chunk in table_chunks:
+            assert "| --- | --- |" in chunk["text"]
+
     def test_chunker_preserves_markdown_table_block(self):
         text = "Intro\n\n| Col1 | Col2 |\n| --- | --- |\n| a | b |\n\nFin"
         chunks = chunk_text_hierarchical(text, chunk_size=400, overlap=60)

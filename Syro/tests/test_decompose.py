@@ -101,3 +101,30 @@ class TestRetrieveDecomposed:
         assert mock_hybrid.call_count == 2
         assert {c["chunk_id"] for c in out} == {"1", "2"}
         mock_reranker.rerank.assert_not_called()
+
+    @patch("app.services.decompose._llm_decompose", return_value=[])
+    @patch("app.services.decompose.hybrid_search")
+    @patch("app.services.crag.retrieve_with_crag")
+    @patch("app.services.decompose.settings")
+    def test_parallel_subqueries_use_crag_when_enabled(
+        self, mock_settings, mock_crag, mock_hybrid, _mock_llm
+    ):
+        mock_settings.enable_query_decomposition = True
+        mock_settings.enable_crag = True
+        mock_settings.rerank_top_k = 5
+        mock_settings.retrieval_top_k = 10
+        mock_settings.query_decomposition_max_subqueries = 3
+        mock_settings.rrf_k = 60
+        mock_settings.enable_reranking = False
+
+        mock_crag.side_effect = [
+            [_chunk("1", "a", 0.9)],
+            [_chunk("2", "b", 0.8)],
+        ]
+
+        q = "Qu'est-ce que MLflow? Comment tracer un run?"
+        out = retrieve_decomposed(organization_id=1, query=q)
+
+        assert mock_crag.call_count == 2
+        mock_hybrid.assert_not_called()
+        assert {c["chunk_id"] for c in out} == {"1", "2"}

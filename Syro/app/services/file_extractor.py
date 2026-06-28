@@ -1,17 +1,24 @@
 ﻿from __future__ import annotations
 
 import io
+import logging
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 
-from pypdf import PdfReader
 from docx import Document  # type: ignore
+from docx.oxml.ns import qn
+from docx.table import Table
+from docx.text.paragraph import Paragraph
+from pypdf import PdfReader
+
+logger = logging.getLogger(__name__)
 
 TEXT_TYPES = {
     "text/plain",
     "text/markdown",
     "text/csv",
 }
+
 
 def _escape_md_cell(value: str) -> str:
     return value.replace("|", "\\|").replace("\n", " ")
@@ -34,46 +41,67 @@ def _rows_to_markdown_table(rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
+def _iter_docx_blocks(document: Document) -> Iterator[Paragraph | Table]:
+    """Parcourt paragraphes et tableaux dans l'ordre du document."""
+    for child in document.element.body:
+        if child.tag == qn("w:p"):
+            yield Paragraph(child, document)
+        elif child.tag == qn("w:tbl"):
+            yield Table(child, document)
+
+
 def _extract_pdf(content: bytes) -> str:
     parts: list[str] = []
-    reader = PdfReader(io.BytesIO(content))
-    for page in reader.pages:
-        parts.append(page.extract_text() or "")
 
-    # Tableaux via pdfplumber si disponible (T5.1)
     try:
         import pdfplumber
-
-        with pdfplumber.open(io.BytesIO(content)) as pdf:
-            for page in pdf.pages:
-                for table in page.extract_tables() or []:
-                    rows = [
-                        [(cell or "").strip() for cell in row]
-                        for row in table
-                        if row and any((cell or "").strip() for cell in row)
-                    ]
-                    md = _rows_to_markdown_table(rows)
-                    if md:
-                        parts.append(md)
     except ImportError:
-        pass
+        pdfplumber = None  # type: ignore[assignment]
 
-    return "\n\n".join(p for p in parts if p.strip())
+    if pdfplumber is not None:
+        try:
+            with pdfplumber.open(io.BytesIO(content)) as pdf:
+                for page in pdf.pages:
+                    page_text = (page.extract_text() or "").strip()
+                    if page_text:
+                        parts.append(page_text)
+                    for table in page.extract_tables() or []:
+                        rows = [
+                            [(cell or "").strip() for cell in row]
+                            for row in table
+                            if row and any((cell or "").strip() for cell in row)
+                        ]
+                        md = _rows_to_markdown_table(rows)
+                        if md:
+                            parts.append(md)
+            return "\n\n".join(parts)
+        except Exception as exc:
+            logger.warning("pdfplumber extraction failed, falling back to pypdf: %s", exc)
+            parts = []
+
+    reader = PdfReader(io.BytesIO(content))
+    for page in reader.pages:
+        text = (page.extract_text() or "").strip()
+        if text:
+            parts.append(text)
+    return "\n\n".join(parts)
 
 
 def _extract_docx(content: bytes) -> str:
     doc = Document(io.BytesIO(content))
     parts: list[str] = []
-    for paragraph in doc.paragraphs:
-        text = paragraph.text.strip()
-        if text:
-            parts.append(text)
-    for table in doc.tables:
-        rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
-        md = _rows_to_markdown_table(rows)
-        if md:
-            parts.append(md)
+    for block in _iter_docx_blocks(doc):
+        if isinstance(block, Paragraph):
+            text = block.text.strip()
+            if text:
+                parts.append(text)
+        else:
+            rows = [[cell.text.strip() for cell in row.cells] for row in block.rows]
+            md = _rows_to_markdown_table(rows)
+            if md:
+                parts.append(md)
     return "\n\n".join(parts)
+
 
 def extract_text_from_bytes(content: bytes, filename: str, content_type: Optional[str]) -> str:
     ext = Path(filename).suffix.lower()
@@ -84,6 +112,7 @@ def extract_text_from_bytes(content: bytes, filename: str, content_type: Optiona
     if content_type in {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"} or ext in {".docx", ".doc"}:
         return _extract_docx(content)
     return content.decode("utf-8", errors="ignore")
+
 
 def detect_source_type(filename: str, content_type: Optional[str]) -> str:
     ext = Path(filename).suffix.lower().lstrip(".")
