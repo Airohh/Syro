@@ -7,6 +7,15 @@
 
 ---
 
+## Session 2026-06-28 — T4.5 cache sémantique
+
+### T4.5 ✅ — semantic cache retrieval
+- `semantic_cache.py` : hit si similarité embedding ≥ 0.95 ; TTL + max entries ; invalidation par domaine à l'ingestion.
+- Branché dans `retrieve_chunks_with_metadata` (lookup avant retrieval, store après).
+- Tests : `test_semantic_cache.py` (6). **105 tests verts.**
+
+---
+
 ## Session 2026-06-28 — T1.3 Langfuse + T1.4 gate retrieval
 
 ### T1.3 ✅ — tracing Langfuse

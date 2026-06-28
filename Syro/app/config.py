@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     self_rag_max_chunks: int = 8  # maximum injecté dans le prompt
     enable_query_decomposition: bool = False  # T3.3 : décomposition multi-hop
     query_decomposition_max_subqueries: int = 3
+    enable_semantic_cache: bool = False  # T4.5 : cache retrieval par similarité embedding
+    semantic_cache_similarity_threshold: float = 0.95
+    semantic_cache_max_entries: int = 500
+    semantic_cache_ttl_seconds: int = 3600
     ollama_use_gpu: bool = True
     embedding_cache_enabled: bool = True
     embedding_cache_size: int = 1000

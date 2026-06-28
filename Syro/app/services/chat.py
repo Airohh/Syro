@@ -166,6 +166,7 @@ def build_answer(
                 "crag": settings.enable_crag,
                 "self_rag": settings.enable_self_rag,
                 "decomposition": settings.enable_query_decomposition,
+                "semantic_cache": settings.enable_semantic_cache,
             },
         )
 

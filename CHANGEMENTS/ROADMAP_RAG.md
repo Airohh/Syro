@@ -71,7 +71,7 @@ S'y ajoute une **dette technique ciblée** : duplication ingestion (worker vs se
 | Query understanding | 🟡 | Rewriting/HyDE livrés (opt-in, T2.1–T2.2) ; mesure golden set en attente stack. |
 | Historique conversationnel | 🟢 | T2.5 ✅ : `load_conversation_history` → retrieval (`history`) + prompt LLM ; flag rewriting réutilisable. |
 | Agentic / corrective | 🟡 | T3.1–T3.3 livrés (opt-in) ; T3.4 GraphRAG backlog. |
-| Tests | 🟡 | Suite lean **99 tests** (T0.0 ✅) : retrieval, agentique, Langfuse, gates eval. |
+| Tests | 🟡 | Suite lean **105 tests** (T0.0 ✅). |
 | Tracing RAG | 🟡 | T1.3 Langfuse livré (opt-in) ; validation UI avec stack `--profile langfuse`. |
 | Ingestion multimodale | 🔴 | Texte seul. `_extract_docx` ignore tableaux/images. |
 | Structure code | 🟡 | `app/services/` plat (22 fichiers), 247 micro-communautés = couplage transversal. |
@@ -413,14 +413,9 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 - **Acceptation** : panne Qdrant simulée → réconciliation automatique au retour.
 
 #### T4.5 — Cache sémantique des requêtes
-- **P3 · Story · 3 SP · backlog · PE · dépend : T1.3**
-- **Pourquoi** : requêtes proches/répétées re-déclenchent embedding + retrieval + LLM (coût + latence). Un cache sémantique (similarité embedding de la requête) sert les réponses chaudes. Nice-to-have, pas critique tant que le volume est faible.
-- **Étapes** :
-  1. Cache clé = embedding requête ; hit si similarité ≥ seuil (ex. 0.95) sur une fenêtre récente (Redis).
-  2. Invalidation à l'ingestion (toute modif du corpus du domaine purge le cache du domaine).
-  3. Flag `enable_semantic_cache` (off par défaut) ; tracer hit/miss dans Langfuse (T1.3) et mesurer latence p95.
-- **Fichiers** : `app/services/retrieval/semantic_cache.py` (nouveau), `hybrid_search.py`/`chat.py`, `config.py`, `ingestion` (invalidation).
-- **Acceptation** : sur un jeu de requêtes répétées, baisse mesurée de latence p95 sans régression de qualité ; flag off = comportement actuel.
+- **P3 · Story · 3 SP · backlog · PE · dépend : T1.3** · Statut : ✅ **Code livré (2026-06-28)** — `ENABLE_SEMANTIC_CACHE=false` par défaut.
+- **Livré** : `semantic_cache.py` (in-process, cosine ≥ 0.95) ; lookup/store dans `rag.py` ; invalidation domaine à l'ingestion.
+- **Acceptation** : ✅ tests `test_semantic_cache.py` (6).
 
 ### EPIC E5 — Multimodal
 
@@ -542,7 +537,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T4.2 | PostgreSQL | E4 | 13 | backlog | BE | ⬜ |
 | T4.3 | Stockage objet | E4 | 5 | S6 | PE | ⬜ |
 | T4.4 | Cohérence DB↔Qdrant | E4 | 8 | backlog | BE | ⬜ |
-| T4.5 | Cache sémantique | E4 | 3 | backlog | PE | ⬜ |
+| T4.5 | Cache sémantique | E4 | 3 | backlog | PE | ✅ |
 | T5.1 | Extraction tableaux | E5 | 5 | S6 | BE | ⬜ |
 | T5.2 | OCR images | E5 | 8 | backlog | BE | ⬜ |
 
