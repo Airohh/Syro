@@ -21,6 +21,12 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / denom)
 
 
+def _copy_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # Copier aussi le metadata imbriqué : self_rag y écrit en place (self_rag_relevance),
+    # sinon la mutation contamine les entrées cachées partagées entre requêtes.
+    return [{**c, "metadata": dict(c.get("metadata") or {})} for c in chunks]
+
+
 def _scope_key(
     organization_id: int,
     domain: str | None,
@@ -84,7 +90,7 @@ class SemanticCache:
                 organization_id,
                 query[:60],
             )
-            return [dict(c) for c in best.chunks], "hit"
+            return _copy_chunks(best.chunks), "hit"
 
         return None, "miss"
 
@@ -105,7 +111,7 @@ class SemanticCache:
         entry = _CacheEntry(
             query=query,
             embedding=query_embedding.copy(),
-            chunks=[dict(c) for c in chunks],
+            chunks=_copy_chunks(chunks),
         )
         bucket = self._entries.setdefault(key, [])
         bucket.append(entry)

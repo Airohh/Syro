@@ -45,26 +45,20 @@ def filter_relevant_chunks(
     max_k = settings.self_rag_max_chunks
     threshold = settings.self_rag_min_relevance
 
-    above = [chunk for rel, chunk in scored if rel >= threshold]
-    if len(above) >= min_k:
-        kept = above[:max_k]
-    else:
-        kept = [chunk for _, chunk in scored[:min_k]]
+    above = [pair for pair in scored if pair[0] >= threshold]
+    kept_pairs = above[:max_k] if len(above) >= min_k else scored[:min_k]
 
-    dropped = len(chunks) - len(kept)
+    dropped = len(chunks) - len(kept_pairs)
     if dropped:
         logger.info(
             "Self-RAG filtered %d/%d chunks (kept %d, threshold=%.2f)",
             dropped,
             len(chunks),
-            len(kept),
+            len(kept_pairs),
             threshold,
         )
 
-    for chunk in kept:
-        chunk.setdefault("metadata", {})
-        chunk["metadata"]["self_rag_relevance"] = round(
-            chunk_relevance_score(query, chunk), 4
-        )
+    for rel, chunk in kept_pairs:
+        chunk["metadata"] = {**(chunk.get("metadata") or {}), "self_rag_relevance": round(rel, 4)}
 
-    return kept
+    return [chunk for _, chunk in kept_pairs]

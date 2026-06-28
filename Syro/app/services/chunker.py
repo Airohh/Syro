@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
 
 import tiktoken
 
+
+@lru_cache(maxsize=8)
+def _get_encoding(model: str):
+    return tiktoken.encoding_for_model(model)
+
+
 def count_tokens(text: str, model: str = "gpt-4") -> int:
     try:
-        encoding = tiktoken.encoding_for_model(model)
-        return len(encoding.encode(text))
+        return len(_get_encoding(model).encode(text))
     except Exception:
         return len(text) // 4
 
@@ -95,46 +101,39 @@ def _split_by_headers(text: str) -> list[dict[str, Any]]:
     html_pattern = r'<(h[1-6])[^>]*>(.*?)</\1>'
     
     lines = text.split('\n')
-    current_section = {"text": "", "header": "", "level": 0}
-    
+    buffer: list[str] = []
+    header = ""
+    level = 0
+
+    def flush() -> None:
+        body = "\n".join(buffer)
+        if body.strip():
+            sections.append({"text": body, "header": header, "level": level})
+
     for line in lines:
         md_match = re.match(markdown_pattern, line.strip())
         if md_match:
-            if current_section["text"].strip():
-                sections.append(current_section)
+            flush()
+            buffer = []
             level = len(md_match.group(1))
             header = md_match.group(2).strip()
-            current_section = {
-                "text": "",
-                "header": header,
-                "level": level,
-            }
             continue
-        
+
         html_match = re.search(html_pattern, line, re.IGNORECASE)
         if html_match:
-            if current_section["text"].strip():
-                sections.append(current_section)
+            flush()
+            buffer = []
             level = int(html_match.group(1)[1])  # h1 -> 1, h2 -> 2, etc.
             header = html_match.group(2).strip()
-            current_section = {
-                "text": "",
-                "header": header,
-                "level": level,
-            }
             continue
-        
-        if current_section["text"]:
-            current_section["text"] += "\n" + line
-        else:
-            current_section["text"] = line
-    
-    if current_section["text"].strip():
-        sections.append(current_section)
-    
+
+        buffer.append(line)
+
+    flush()
+
     if not sections:
         return [{"text": text, "header": "", "level": 0}]
-    
+
     return sections
 
 def _is_markdown_table_block(text: str) -> bool:
