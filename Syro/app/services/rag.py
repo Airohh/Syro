@@ -44,43 +44,48 @@ def index_document_content(
     except VectorStoreError as e:
         logger.warning("Could not delete existing chunks for doc %d: %s", document_id, e)
     
+    chunk_payloads: list[dict[str, Any]] = []
     with db_session() as conn:
         conn.execute("DELETE FROM doc_chunks WHERE document_id = ?", (document_id,))
-        
+
         for chunk_info in chunk_data:
             chunk_text = chunk_info["text"]
             chunk_index = chunk_info["index"]
-            
+
             chunk_cur = conn.execute(
                 "INSERT INTO doc_chunks (document_id, chunk_index, text) VALUES (?, ?, ?)",
                 (document_id, chunk_index, chunk_text),
             )
             chunk_id = chunk_cur.lastrowid
-            
-            qdrant_chunk_id = f"{organization_id}_{document_id}_{chunk_id}"
-            
-            chunk_metadata = {
-                "chunk_index": chunk_index,
-                "header": chunk_info.get("header", ""),
-                "level": chunk_info.get("level", 0),
-                **(metadata or {}),
-            }
-            
-            try:
-                vector_store.add_chunk(
-                    chunk_id=qdrant_chunk_id,
-                    organization_id=organization_id,
-                    document_id=document_id,
-                    text=chunk_text,
-                    metadata=chunk_metadata,
-                    domain=detected_domain,
-                )
-            except VectorStoreError as e:
-                logger.error(
-                    "Failed to index chunk %s (doc %d) in Qdrant — SQLite/Qdrant out of sync: %s",
-                    qdrant_chunk_id, document_id, e,
-                )
-    
+
+            chunk_payloads.append({
+                "chunk_id": f"{organization_id}_{document_id}_{chunk_id}",
+                "text": chunk_text,
+                "metadata": {
+                    "chunk_index": chunk_index,
+                    "header": chunk_info.get("header", ""),
+                    "level": chunk_info.get("level", 0),
+                    **(metadata or {}),
+                },
+            })
+
+    # Indexation Qdrant en un seul lot (embeddings + upsert groupés) après le
+    # commit SQLite. En cas d'échec Qdrant, SQLite garde les chunks : on logue
+    # le désync (même contrat qu'avant, mais tout-ou-rien côté Qdrant).
+    if chunk_payloads:
+        try:
+            vector_store.add_chunks_batch(
+                chunk_payloads,
+                organization_id=organization_id,
+                document_id=document_id,
+                domain=detected_domain,
+            )
+        except VectorStoreError as e:
+            logger.error(
+                "Failed to batch-index doc %d (%d chunks) in Qdrant — SQLite/Qdrant out of sync: %s",
+                document_id, len(chunk_payloads), e,
+            )
+
     bm25_search.mark_for_rebuild(organization_id)
     
     tracker = get_mlops_tracker()

@@ -47,8 +47,11 @@ class TestIndexDocumentContent:
         assert chunk_count == 2
         # Should delete old chunks
         assert mock_vector_store.delete_chunks_by_document.called
-        # Should add new chunks
-        assert mock_vector_store.add_chunk.call_count == 2
+        # Should add new chunks in a single batch call (1 ensure + 1 embed + 1 upsert)
+        assert mock_vector_store.add_chunks_batch.call_count == 1
+        batch_arg = mock_vector_store.add_chunks_batch.call_args.args[0]
+        assert len(batch_arg) == 2
+        assert all("chunk_id" in c and "text" in c and "metadata" in c for c in batch_arg)
         # Should mark BM25 for rebuild
         assert mock_bm25.mark_for_rebuild.called
 
