@@ -70,67 +70,73 @@ def create_document_entry(
 def queue_ingestion(background_tasks: BackgroundTasks, document_id: int, organization_id: int, storage_path: str, mime_type: str | None, domain: str | None = None) -> None:
     background_tasks.add_task(process_document, document_id, organization_id, storage_path, mime_type, domain)
 
-def process_document(document_id: int, organization_id: int, storage_path: str, mime_type: str | None, domain: str | None = None) -> None:
+_TYPE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("snowflake", ("snowflake", "snow")),
+    ("airflow", ("airflow", "dag")),
+    ("databricks", ("databricks", "spark")),
+    ("azure", ("azure", "synapse")),
+    ("terraform", ("terraform", "tf")),
+    ("sql", ("sql", "query")),
+]
+
+
+def infer_metadata(filename: str, tags: list[str], source_type: str, domain: str | None = None) -> dict:
+    """Construit les métadonnées d'un chunk (type/difficulté) à partir du nom de
+    fichier et des tags. Source unique partagée par le worker Celery et le
+    fallback BackgroundTasks (évite la divergence d'inférence)."""
+    metadata: dict = {"source_type": source_type, "tags": tags}
+    if domain:
+        metadata["domain"] = domain
+
+    filename_lower = filename.lower()
+    metadata["type"] = next(
+        (label for label, keywords in _TYPE_KEYWORDS if any(k in filename_lower for k in keywords)),
+        "general",
+    )
+
+    lowered = {t.lower() for t in tags}
+    if lowered & {"beginner", "intro", "basics"}:
+        metadata["difficulty"] = "beginner"
+    elif lowered & {"advanced", "expert", "complex"}:
+        metadata["difficulty"] = "expert"
+    else:
+        metadata["difficulty"] = "intermediate"
+    return metadata
+
+
+def run_ingestion(document_id: int, organization_id: int, storage_path: str, mime_type: str | None, domain: str | None = None) -> int:
+    """Cœur d'ingestion partagé (extract → métadonnées → index Qdrant).
+
+    Lève en cas d'échec ; la gestion du statut/metrics/retry est laissée à
+    l'appelant (worker Celery vs BackgroundTasks). Retourne le nombre de chunks.
+    """
     path = Path(storage_path)
+    content_bytes = path.read_bytes()
+    text = extract_text_from_bytes(content_bytes, path.name, mime_type)
+    if not text.strip():
+        raise ValueError("Document vide après extraction")
+
+    with db_session() as conn:
+        doc_row = conn.execute(
+            "SELECT filename, source_type, tags FROM documents WHERE id = ?",
+            (document_id,),
+        ).fetchone()
+    if not doc_row:
+        raise ValueError(f"Document {document_id} non trouvé dans la DB")
+
     try:
-        content_bytes = path.read_bytes()
-        text = extract_text_from_bytes(content_bytes, path.name, mime_type)
-        if not text.strip():
-            raise ValueError("Document vide après extraction")
-        
-        # Extract metadata from document
-        with db_session() as conn:
-            doc_row = conn.execute(
-                "SELECT filename, source_type, tags FROM documents WHERE id = ?",
-                (document_id,),
-            ).fetchone()
-            
-            if doc_row:
-                source_type = doc_row["source_type"] or "unknown"
-                tags_json = doc_row["tags"]
-                try:
-                    tags = json.loads(tags_json) if tags_json else []
-                except (json.JSONDecodeError, TypeError):
-                    tags = []
-                
-                # Infer document type and theme from filename/tags
-                metadata = {
-                    "source_type": source_type,
-                    "tags": tags,
-                }
-                
-                # If domain is forced, use it instead of auto-detection
-                if domain:
-                    metadata["domain"] = domain
-                
-                # Try to infer type (snowflake, airflow, etc.) from filename/tags
-                filename_lower = doc_row["filename"].lower()
-                if any(keyword in filename_lower for keyword in ["snowflake", "snow"]):
-                    metadata["type"] = "snowflake"
-                elif any(keyword in filename_lower for keyword in ["airflow", "dag"]):
-                    metadata["type"] = "airflow"
-                elif any(keyword in filename_lower for keyword in ["databricks", "spark"]):
-                    metadata["type"] = "databricks"
-                elif any(keyword in filename_lower for keyword in ["azure", "synapse"]):
-                    metadata["type"] = "azure"
-                elif any(keyword in filename_lower for keyword in ["terraform", "tf"]):
-                    metadata["type"] = "terraform"
-                elif any(keyword in filename_lower for keyword in ["sql", "query"]):
-                    metadata["type"] = "sql"
-                else:
-                    metadata["type"] = "general"
-                
-                # Infer difficulty (simple heuristic)
-                if any(tag.lower() in ["beginner", "intro", "basics"] for tag in tags):
-                    metadata["difficulty"] = "beginner"
-                elif any(tag.lower() in ["advanced", "expert", "complex"] for tag in tags):
-                    metadata["difficulty"] = "expert"
-                else:
-                    metadata["difficulty"] = "intermediate"
-            else:
-                metadata = {}
-        
-        chunk_count = index_document_content(document_id, organization_id, text, metadata=metadata)
+        tags = json.loads(doc_row["tags"]) if doc_row["tags"] else []
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+    metadata = infer_metadata(doc_row["filename"], tags, doc_row["source_type"] or "unknown", domain)
+
+    return index_document_content(document_id, organization_id, text, metadata=metadata)
+
+
+def process_document(document_id: int, organization_id: int, storage_path: str, mime_type: str | None, domain: str | None = None) -> None:
+    """Fallback BackgroundTasks : ingestion synchrone + maj statut DB."""
+    try:
+        chunk_count = run_ingestion(document_id, organization_id, storage_path, mime_type, domain)
         with db_session() as conn:
             conn.execute(
                 "UPDATE documents SET ingestion_status = 'complete', chunk_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",

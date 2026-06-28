@@ -9,9 +9,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from .main import celery_app
 from app.db import db_session
-from app.services.file_extractor import extract_text_from_bytes
-from app.services.rag import index_document_content
-import json
+from app.services.ingestion import run_ingestion
 import logging
 import time
 
@@ -33,8 +31,6 @@ def process_document_upload(self, document_id: int, organization_id: int, storag
     Returns:
         dict: Résultat avec chunk_count et statut
     """
-    path = Path(storage_path)
-    
     domain_str = domain or "unknown"
     start_time = time.time()
     
@@ -60,69 +56,10 @@ def process_document_upload(self, document_id: int, organization_id: int, storag
             )
             conn.commit()
         
-        # Lire et extraire le texte
-        content_bytes = path.read_bytes()
-        text = extract_text_from_bytes(content_bytes, path.name, mime_type)
-        
-        if not text.strip():
-            raise ValueError("Document vide après extraction")
-        
-        # Extraire les métadonnées depuis la DB
-        with db_session() as conn:
-            doc_row = conn.execute(
-                "SELECT filename, source_type, tags FROM documents WHERE id = ?",
-                (document_id,),
-            ).fetchone()
-            
-            if not doc_row:
-                raise ValueError(f"Document {document_id} non trouvé dans la DB")
-            
-            source_type = doc_row["source_type"] or "unknown"
-            tags_json = doc_row["tags"]
-            try:
-                tags = json.loads(tags_json) if tags_json else []
-            except (json.JSONDecodeError, TypeError):
-                tags = []
-            
-            # Construire les métadonnées
-            metadata = {
-                "source_type": source_type,
-                "tags": tags,
-            }
-            
-            # Si domaine forcé, l'utiliser
-            if domain:
-                metadata["domain"] = domain
-            
-            # Inférer le type depuis le nom de fichier
-            filename_lower = doc_row["filename"].lower()
-            if any(keyword in filename_lower for keyword in ["snowflake", "snow"]):
-                metadata["type"] = "snowflake"
-            elif any(keyword in filename_lower for keyword in ["airflow", "dag"]):
-                metadata["type"] = "airflow"
-            elif any(keyword in filename_lower for keyword in ["databricks", "spark"]):
-                metadata["type"] = "databricks"
-            elif any(keyword in filename_lower for keyword in ["azure", "synapse"]):
-                metadata["type"] = "azure"
-            elif any(keyword in filename_lower for keyword in ["terraform", "tf"]):
-                metadata["type"] = "terraform"
-            elif any(keyword in filename_lower for keyword in ["sql", "query"]):
-                metadata["type"] = "sql"
-            else:
-                metadata["type"] = "general"
-            
-            # Inférer la difficulté
-            if any(tag.lower() in ["beginner", "intro", "basics"] for tag in tags):
-                metadata["difficulty"] = "beginner"
-            elif any(tag.lower() in ["advanced", "expert", "complex"] for tag in tags):
-                metadata["difficulty"] = "expert"
-            else:
-                metadata["difficulty"] = "intermediate"
-        
-        # Indexer le document (chunking + embeddings + upsert Qdrant)
+        # Cœur d'ingestion partagé (extract -> métadonnées -> index Qdrant).
         logger.info(f"Indexation du document {document_id}...")
-        chunk_count = index_document_content(document_id, organization_id, text, metadata=metadata)
-        
+        chunk_count = run_ingestion(document_id, organization_id, storage_path, mime_type, domain)
+
         # Mettre à jour le statut en "complete"
         with db_session() as conn:
             conn.execute(
