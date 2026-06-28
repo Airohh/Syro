@@ -49,6 +49,9 @@ smoke: ## Smoke test post-deploiement (API + Qdrant + Redis + MLflow)
 eval: ## Evaluation RAGAS reproductible (necessite OPENAI_API_KEY ou USE_OLLAMA=true)
 	python evaluation/evaluate.py
 
+eval-gate: ## Gate d'integrite du golden set (deterministe, sans LLM)
+	python evaluation/validate_golden_set.py
+
 benchmark: ## Benchmark latence p50/p95/p99 (retrieval vs end-to-end, stack requis)
 	python evaluation/benchmark.py --repeats 5
 

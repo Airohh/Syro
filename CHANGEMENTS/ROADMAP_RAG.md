@@ -4,9 +4,10 @@
 >
 > **Sources** : analyse du graphe graphify (1593 nœuds), lecture du code, doc d'architecture interne, best practices RAG 2026 (Pramana, Ultra-RAG, Onyx, WeKnora, NVIDIA RAG Blueprint).
 >
-> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 Phase 0 (E0) complète · E1 en cours (T1.1 🟡 golden set 100, T1.2 ✅ métriques retrieval) → reste T1.3 (Langfuse), T1.4 (éval CI)
+> **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 Phase 0 (E0) complète · E1 en cours (T1.1 🟡 golden set 100, T1.2 ✅ métriques retrieval, T1.4 🟡 gate intégrité CI) → reste T1.3 (Langfuse), seuil qualité T1.4
 
 > **Journal de progression**
+> - `2026-06-28` — **T1.4 🟡** : gate déterministe d'intégrité du golden set en CI (`validate_golden_set.py` + `tests/test_golden_set.py`, `make eval-gate`). Reste seuil qualité retrieval-live + RAGAS (coût/infra).
 > - `2026-06-28` — **T1.2 ✅** : métriques retrieval déterministes (`evaluation/metrics.py` : Recall@K, nDCG, MRR, Precision@K, refus OOB) testées ; `evaluate.py` sépare retrieval/génération dans `report.json`.
 > - `2026-06-28` — **T1.1 🟡** : golden set étendu à 100 paires (4 buckets, `relevant_doc_ids` sur 72), générateur `build_golden_set.py`. Reste relecture DA + annotation des 20 legacy.
 > - `2026-06-28` — **Phase 0 (E0) complète** : T0.0–T0.4 tous ✅.
@@ -303,7 +304,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 - **Acceptation** : une requête chat apparaît dans Langfuse avec toutes les étapes et scores.
 
 #### T1.4 — Éval en CI (gate sur seuils)
-- **P1 · Tâche · 3 SP · S3 · PE · dépend : T0.0, T1.1, T1.2**
+- **P1 · Tâche · 3 SP · S3 · PE · dépend : T0.0, T1.1, T1.2** · Statut : 🟡 **Volet déterministe livré (2026-06-28)** — gate d'intégrité du golden set (`evaluation/validate_golden_set.py`, cible `make eval-gate`) exécuté en CI via la suite lean (`tests/test_golden_set.py`) : schéma, domaines, intents, `relevant_doc_ids` existants, OOB vide, doublons, tailles mini. **Reste** : gate seuil qualité (Recall@10/nDCG sur retrieval live) → job nightly/CI avec Qdrant + embeddings ; seuils RAGAS (faithfulness ≥ 0.9…) → coût LLM judge à arbitrer.
 - **Pourquoi** : « eval as continuous engineering » — bloquer les régressions au merge.
 - **Étapes** :
   1. Job CI sur un sous-ensemble rapide.
@@ -532,7 +533,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T1.1 | Golden set 100–200 | E1 | 8 | S1-S2 | DA/PE | 🟡 |
 | T1.2 | Éval retrieval vs génération | E1 | 5 | S2 | PE | ✅ |
 | T1.3 | Langfuse | E1 | 5 | S2 | PE | ⬜ |
-| T1.4 | Éval en CI | E1 | 3 | S3 | PE | ⬜ |
+| T1.4 | Éval en CI | E1 | 3 | S3 | PE | 🟡 |
 | T2.1 | Query rewriting | E2 | 5 | S3 | TL | ⬜ |
 | T2.2 | HyDE | E2 | 3 | S4 | TL | ⬜ |
 | T2.3 | Tuning poids/RRF | E2 | 3 | S3 | PE | ⬜ |

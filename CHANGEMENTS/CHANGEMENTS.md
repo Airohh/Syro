@@ -56,7 +56,11 @@ Branche : `fix/chat-500-resilience` · **9 commits, pushés** (`454a2aa..e7d31d6
 - `evaluation/metrics.py` : métriques de ranking déterministes (Recall@K, Precision@K, nDCG@K, MRR, hit@K) + `oob_refusal_rate` + agrégation par bucket. Sans LLM. Tests : `tests/test_eval_metrics.py` (7).
 - `evaluate.py` : mappe les chunks récupérés → `documents.filename` (via `chunk_id` `{org}_{doc}_{chunk}`), compare aux `relevant_doc_ids`, et écrit `report.json` séparant `retrieval_metrics` (déterministe) et `generation_metrics` (RAGAS). Scores réels = run avec stack.
 
-> Prochaine : E1 — T1.3 (Langfuse), T1.4 (éval CI sur seuils).
+### T1.4 🟡 — gate d'intégrité golden set en CI (`feat(eval)`)
+- `evaluation/validate_golden_set.py` + `tests/test_golden_set.py` (5) + cible `make eval-gate` : vérifie schéma, domaines, intents, `relevant_doc_ids` existants, OOB vide, doublons, tailles mini — déterministe, sans LLM, exécuté par le job CI `test`. Bloque toute régression du jeu d'éval au merge.
+- Reste (T1.4 suite) : gate seuil qualité (Recall@10/nDCG retrieval-live → job avec Qdrant) et seuils RAGAS (coût LLM judge).
+
+> Prochaine : E1 — T1.3 (Langfuse, infra), seuil qualité T1.4. Suite : 44 tests verts.
 
 ---
 
