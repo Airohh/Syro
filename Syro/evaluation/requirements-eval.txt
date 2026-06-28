@@ -1,2 +1,3 @@
 ragas>=0.2.0
 datasets>=2.14.0
+pyarrow>=17.0.0  # datasets>=2.x needs pa.json_() (added in pyarrow 17)
