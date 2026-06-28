@@ -51,7 +51,13 @@ def _get_detected_domains(
     )
 
     if use_auto_detect:
-        detected_domains = detect_domain(query)
+        # detect_domain ne doit jamais faire échouer la requête : en cas de
+        # pépin (dépendance manquante, entrée inattendue) on retombe sur le
+        # domaine par défaut au lieu de remonter une 500.
+        try:
+            detected_domains = detect_domain(query)
+        except Exception:  # pragma: no cover - garde défensive
+            detected_domains = None
         primary_domain = detected_domains[0] if detected_domains else settings.domain
         return detected_domains, primary_domain
 
