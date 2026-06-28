@@ -3,7 +3,7 @@
 > **Documents de ce dossier**
 > - **`ROADMAP_RAG.md`** — 📌 **Plan d'exécution team-ready** (diagnostic, archi cible, RACI, ways of working, 25 tickets, plan de sprints, chemin critique, risques, KPI, board de suivi). Document de référence pour piloter le travail.
 > - `CHANGEMENTS.md` (ce fichier) — journal des changements de code par session.
-> - `ADR-001-multidomaine.md` — *(à créer, ticket T0.4)* décision d'architecture multi-domaines.
+> - `ADR-001-multidomaine.md` — décision d'architecture multi-domaines (ticket T0.4, statut **Proposed** — à valider TL).
 
 ---
 

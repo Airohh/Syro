@@ -7,6 +7,7 @@
 > **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟡 Phase 0 en cours (T0.0 ✅, T0.1 ✅, T0.2 ✅)
 
 > **Journal de progression**
+> - `2026-06-28` — **T0.4 🟡** : ADR-001 multi-domaines rédigé (statut Proposed). Constat : code déjà de facto en Option A (mono-API, routes `/domains/{domain}/`). Attente validation TL + retrait indirection ports.
 > - `2026-06-28` — **T0.2 ✅ terminé** : bug 500 chat clôturé par non-régression (embedding KO + Qdrant KO → BM25-only ; domain endpoint panne aval → 500 sans fuite + rollback). Diagnostic déjà marqué résolu.
 > - `2026-06-28` — **T0.0 ✅ terminé** : suite lean reconstruite (25 tests verts) — `conftest` (gardes GPU/HF offline + stub FlagEmbedding), non-régression RRF + fallback BM25, résilience chat (domain endpoint, pas de fuite/rollback), idempotence ingestion corpus, extraction texte, garde-fous secret prod + CORS wildcard. `pytest*` remis en deps, job CI `test` bloquant, cibles `make test`/`test-cov`. Helper `resolve_cors_settings` extrait pour testabilité.
 > - `2026-06-28` — **T0.1 ✅ terminé** : `storage/mlruns/`, `__pycache__/`, `*.pyc`, `.pytest_cache/` supprimés ; `htmlcov/` déjà ignoré ; logo doublon supprimé ; copie OneDrive redondante supprimée.
@@ -256,7 +257,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 - **Acceptation** : tests ingestion/worker lean verts sans duplication ; `run_ingestion` couvert par un test.
 
 #### T0.4 — Trancher le modèle multi-domaines (ADR)
-- **P1 · Décision · 2 SP · S1 · TL · dépend : —**
+- **P1 · Décision · 2 SP · S1 · TL · dépend : —** · Statut : 🟡 **ADR rédigé (Proposed), en attente validation TL** — `CHANGEMENTS/ADR-001-multidomaine.md`. Constat : le code est déjà de facto en Option A (`domainPorts.ts` renvoie 8000 partout, routes `/domains/{domain}/...`) ; reste à valider + retirer l'indirection ports vestigiale.
 - **Pourquoi** : Docker = 1 API (`DOMAIN=general`), frontend = N ports (`domainPorts.ts`) ; incohérence produit.
 - **Étapes** :
   1. Rédiger `CHANGEMENTS/ADR-001-multidomaine.md` (contexte, options, décision, conséquences).
@@ -523,7 +524,7 @@ Légende : ⬜ à faire · 🟡 en cours · ✅ fait · ⛔ bloqué
 | T0.1 | Assainir le repo | E0 | 1 | S1 | PE | ✅ |
 | T0.2 | Clôturer bug 500 chat | E0 | 3 | S1 | BE | ✅ |
 | T0.3 | Fusionner ingestion | E0 | 5 | S1 | BE | ⬜ |
-| T0.4 | ADR multi-domaines | E0 | 2 | S1 | TL | ⬜ |
+| T0.4 | ADR multi-domaines | E0 | 2 | S1 | TL | 🟡 |
 | T1.1 | Golden set 100–200 | E1 | 8 | S1-S2 | DA/PE | ⬜ |
 | T1.2 | Éval retrieval vs génération | E1 | 5 | S2 | PE | ⬜ |
 | T1.3 | Langfuse | E1 | 5 | S2 | PE | ⬜ |
