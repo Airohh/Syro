@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
-from typing import Any, Sequence
+from typing import Any
 
 from rank_bm25 import BM25Okapi
 
@@ -24,6 +24,7 @@ def _domain_from_tags(tags: str | None) -> str:
         except json.JSONDecodeError:
             pass
     return tags.split(",")[0].strip()
+
 
 class BM25Search:
     def __init__(self) -> None:
@@ -74,17 +75,17 @@ class BM25Search:
                 """,
                 (organization_id,),
             ).fetchall()
-        
+
         if not rows:
             self._indexes[organization_id] = (None, [])
             self._needs_rebuild.discard(organization_id)
             return
-        
+
         texts = [row["text"] for row in rows]
         tokenized_texts = [self._tokenize(text) for text in texts]
-        
+
         bm25 = BM25Okapi(tokenized_texts)
-        
+
         chunk_data = [
             {
                 "chunk_id": row["chunk_id"],
@@ -98,7 +99,7 @@ class BM25Search:
             }
             for row in rows
         ]
-        
+
         self._indexes[organization_id] = (bm25, chunk_data)
         self._needs_rebuild.discard(organization_id)
 
@@ -132,7 +133,10 @@ class BM25Search:
             eligible: list[int] = []
             for i, chunk in enumerate(chunk_data):
                 doc_id = chunk["document_id"]
-                if allowed_document_ids is not None and doc_id not in allowed_document_ids:
+                if (
+                    allowed_document_ids is not None
+                    and doc_id not in allowed_document_ids
+                ):
                     continue
                 if domain and chunk.get("domain") and chunk["domain"] != domain:
                     continue
@@ -178,5 +182,5 @@ class BM25Search:
             if organization_id in self._indexes:
                 del self._indexes[organization_id]
 
-bm25_search = BM25Search()
 
+bm25_search = BM25Search()

@@ -20,6 +20,7 @@ def count_tokens(text: str, model: str = "gpt-4") -> int:
     except Exception:
         return len(text) // 4
 
+
 def chunk_text_hierarchical(
     text: str,
     chunk_size: int = 400,
@@ -28,24 +29,24 @@ def chunk_text_hierarchical(
 ) -> list[dict[str, Any]]:
     if not text.strip():
         return []
-    
+
     chunks: list[dict[str, Any]] = []
-    
+
     if respect_headers:
         sections = _split_by_headers(text)
-        
+
         current_chunk = ""
         current_tokens = 0
         current_header = ""
         current_level = 0
         chunk_index = 0
-        
+
         for section in sections:
             section_text = section["text"]
             section_header = section.get("header", "")
             section_level = section.get("level", 0)
             section_tokens = count_tokens(section_text)
-            
+
             if current_tokens + section_tokens <= chunk_size and current_chunk:
                 current_chunk += "\n\n" + section_text
                 current_tokens += section_tokens
@@ -54,14 +55,16 @@ def chunk_text_hierarchical(
                     current_level = section_level
             else:
                 if current_chunk.strip():
-                    chunks.append({
-                        "text": current_chunk.strip(),
-                        "index": chunk_index,
-                        "header": current_header,
-                        "level": current_level,
-                    })
+                    chunks.append(
+                        {
+                            "text": current_chunk.strip(),
+                            "index": chunk_index,
+                            "header": current_header,
+                            "level": current_level,
+                        }
+                    )
                     chunk_index += 1
-                
+
                 if section_tokens <= chunk_size:
                     current_chunk = section_text
                     current_tokens = section_tokens
@@ -70,37 +73,42 @@ def chunk_text_hierarchical(
                 else:
                     sub_chunks = _split_large_section(section_text, chunk_size, overlap)
                     for sub_chunk in sub_chunks:
-                        chunks.append({
-                            "text": sub_chunk.strip(),
-                            "index": chunk_index,
-                            "header": section_header,
-                            "level": section_level,
-                        })
+                        chunks.append(
+                            {
+                                "text": sub_chunk.strip(),
+                                "index": chunk_index,
+                                "header": section_header,
+                                "level": section_level,
+                            }
+                        )
                         chunk_index += 1
                     current_chunk = ""
                     current_tokens = 0
                     current_header = ""
                     current_level = 0
-        
+
         if current_chunk.strip():
-            chunks.append({
-                "text": current_chunk.strip(),
-                "index": chunk_index,
-                "header": current_header,
-                "level": current_level,
-            })
+            chunks.append(
+                {
+                    "text": current_chunk.strip(),
+                    "index": chunk_index,
+                    "header": current_header,
+                    "level": current_level,
+                }
+            )
     else:
         chunks = _chunk_simple(text, chunk_size, overlap)
-    
+
     return chunks
+
 
 def _split_by_headers(text: str) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
-    
-    markdown_pattern = r'^(#{1,6})\s+(.+)$'
-    html_pattern = r'<(h[1-6])[^>]*>(.*?)</\1>'
-    
-    lines = text.split('\n')
+
+    markdown_pattern = r"^(#{1,6})\s+(.+)$"
+    html_pattern = r"<(h[1-6])[^>]*>(.*?)</\1>"
+
+    lines = text.split("\n")
     buffer: list[str] = []
     header = ""
     level = 0
@@ -135,6 +143,7 @@ def _split_by_headers(text: str) -> list[dict[str, Any]]:
         return [{"text": text, "header": "", "level": 0}]
 
     return sections
+
 
 def _is_markdown_table_block(text: str) -> bool:
     lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
@@ -201,7 +210,7 @@ def _split_large_section_words(text: str, chunk_size: int, overlap: int) -> list
     words = text.split()
     chunks: list[str] = []
     start = 0
-    
+
     while start < len(words):
         end = min(len(words), start + chunk_size)
         chunk_text = " ".join(words[start:end])
@@ -211,30 +220,32 @@ def _split_large_section_words(text: str, chunk_size: int, overlap: int) -> list
         start = end - overlap
         if start < 0:
             start = 0
-    
+
     return chunks
+
 
 def _chunk_simple(text: str, chunk_size: int, overlap: int) -> list[dict[str, Any]]:
     words = text.split()
     chunks: list[dict[str, Any]] = []
     start = 0
     index = 0
-    
+
     while start < len(words):
         end = min(len(words), start + chunk_size)
         chunk_text = " ".join(words[start:end])
-        chunks.append({
-            "text": chunk_text,
-            "index": index,
-            "header": "",
-            "level": 0,
-        })
+        chunks.append(
+            {
+                "text": chunk_text,
+                "index": index,
+                "header": "",
+                "level": 0,
+            }
+        )
         index += 1
         if end >= len(words):
             break
         start = end - overlap
         if start < 0:
             start = 0
-    
-    return chunks
 
+    return chunks

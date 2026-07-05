@@ -45,4 +45,3 @@ __all__ = [
     # Nouveau module headers
     "SecurityHeadersMiddleware",
 ]
-

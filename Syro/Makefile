@@ -49,6 +49,9 @@ smoke: ## Smoke test post-deploiement (API + Qdrant + Redis + MLflow)
 eval: ## Evaluation RAGAS reproductible (necessite OPENAI_API_KEY ou USE_OLLAMA=true)
 	python evaluation/evaluate.py
 
+eval-retrieval: ## Retrieval live uniquement (pas de LLM) → report.json
+	python evaluation/evaluate.py --retrieval-only
+
 eval-gate: ## Gate d'integrite du golden set (deterministe, sans LLM)
 	python evaluation/validate_golden_set.py
 

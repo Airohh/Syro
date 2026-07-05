@@ -2,7 +2,17 @@
 import sqlite3
 import uuid
 
-from fastapi import APIRouter, Body, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    UploadFile,
+    File,
+    Form,
+    HTTPException,
+    BackgroundTasks,
+    status,
+)
 
 from ..config import settings
 from ..dependencies import require_active_org, enforce_rate_limit, get_current_user
@@ -14,22 +24,19 @@ from ..services.ingestion import (
 )
 from ..services.celery_client import enqueue_document_ingestion
 from ..services.file_extractor import detect_source_type, extract_text_from_bytes
-from ..services.document_classifier import classify_document, should_ask_confirmation
+from ..services.document_classifier import classify_document
 from ..services.permissions_service import get_user_permissions
 from ..services.vector_store import VectorStore, VectorStoreError
 from ..services.bm25_search import bm25_search
 from ..schemas import DocumentUploadWithClassificationResponse
 from ..db import get_db
 from ..domains import DOMAINS
-from ..security import (
-    MAX_FILE_SIZE,
-    MAX_TEXT_SIZE,
-)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 domain_router = APIRouter(prefix="/domains/{domain}/documents", tags=["documents"])
+
 
 @router.get("")
 def list_documents(
@@ -43,6 +50,7 @@ def list_documents(
         (org["id"],),
     ).fetchall()
     return {"documents": [dict(d) for d in docs]}
+
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
@@ -85,7 +93,9 @@ def delete_document(
         except VectorStoreError as e:
             logger.warning(
                 "Qdrant cleanup failed for doc %d (domain=%s): %s",
-                document_id, domain_id, e,
+                document_id,
+                domain_id,
+                e,
             )
 
     db.execute("DELETE FROM doc_chunks WHERE document_id = ?", (document_id,))
@@ -94,25 +104,29 @@ def delete_document(
 
     bm25_search.mark_for_rebuild(org["id"])
 
+
 @router.post("/text", response_model=DocumentUploadResponse)
 def upload_text_document(
     background_tasks: BackgroundTasks,
     payload: DocumentTextUpload = Body(...),
-    org = Depends(require_active_org(0)),
-    user = Depends(get_current_user),
+    org=Depends(require_active_org(0)),
+    user=Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
     _: bool = Depends(enforce_rate_limit("documents")),
 ):
     title = payload.title
     content = payload.content
     tags = payload.tags
-    
+
     # Valider le contenu texte
     if settings.enable_file_validation:
         max_size = settings.max_text_size_mb * 1024 * 1024
         if len(content.encode("utf-8")) > max_size:
-            raise HTTPException(status_code=400, detail=f"Contenu texte trop volumineux (max {settings.max_text_size_mb} MB)")
-    
+            raise HTTPException(
+                status_code=400,
+                detail=f"Contenu texte trop volumineux (max {settings.max_text_size_mb} MB)",
+            )
+
     storage_path = settings.data_dir / str(org["id"]) / f"{uuid.uuid4()}.txt"
     storage_path.parent.mkdir(parents=True, exist_ok=True)
     storage_path.write_text(content, encoding="utf-8")
@@ -130,16 +144,26 @@ def upload_text_document(
         quality_level_id=1,  # Par défaut: draft
     )
     # Enqueue dans Celery ou BackgroundTasks
-    task_id = enqueue_document_ingestion(doc_id, org["id"], str(storage_path), "text/plain", domain=None, background_tasks=background_tasks)
-    return DocumentUploadResponse(document_id=doc_id, version=version, status="queued", chunk_count=0)
+    enqueue_document_ingestion(
+        doc_id,
+        org["id"],
+        str(storage_path),
+        "text/plain",
+        domain=None,
+        background_tasks=background_tasks,
+    )
+    return DocumentUploadResponse(
+        document_id=doc_id, version=version, status="queued", chunk_count=0
+    )
+
 
 @router.post("/files", response_model=DocumentUploadResponse)
 async def upload_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     tags: str | None = None,
-    org = Depends(require_active_org(0)),
-    user = Depends(get_current_user),
+    org=Depends(require_active_org(0)),
+    user=Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
     _: bool = Depends(enforce_rate_limit("documents")),
 ):
@@ -155,6 +179,7 @@ async def upload_file(
         else:
             content_bytes = await file.read()
         import os
+
         sanitized_filename = os.path.basename(file.filename or "unnamed")
 
         sanitized_name = f"{uuid.uuid4()}_{sanitized_filename}"
@@ -177,18 +202,33 @@ async def upload_file(
         )
         # Enqueue dans Celery ou BackgroundTasks
         # Si Celery/Redis n'est pas disponible, cela basculera automatiquement vers BackgroundTasks (non-bloquant)
-        task_id = enqueue_document_ingestion(doc_id, org["id"], str(storage_path), file.content_type, domain=None, background_tasks=background_tasks)
-        return DocumentUploadResponse(document_id=doc_id, version=version, status="queued", chunk_count=0)
+        enqueue_document_ingestion(
+            doc_id,
+            org["id"],
+            str(storage_path),
+            file.content_type,
+            domain=None,
+            background_tasks=background_tasks,
+        )
+        return DocumentUploadResponse(
+            document_id=doc_id, version=version, status="queued", chunk_count=0
+        )
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
-        logger.error(f"Erreur lors de l'upload du fichier {file.filename}: {e}", exc_info=True)
+        logger.error(
+            f"Erreur lors de l'upload du fichier {file.filename}: {e}", exc_info=True
+        )
         raise HTTPException(
-            status_code=500,
-            detail=f"Erreur lors de l'upload du fichier: {str(e)}"
+            status_code=500, detail=f"Erreur lors de l'upload du fichier: {str(e)}"
         )
 
-@router.post("/upload-with-classification", response_model=DocumentUploadWithClassificationResponse)
+
+@router.post(
+    "/upload-with-classification",
+    response_model=DocumentUploadWithClassificationResponse,
+)
 async def upload_file_with_classification(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -196,48 +236,55 @@ async def upload_file_with_classification(
     domain: str | None = Form(None),
     access_level_id: str | None = Form(None),
     quality_level_id: str | None = Form(None),
-    org = Depends(require_active_org(0)),
-    user = Depends(get_current_user),
+    org=Depends(require_active_org(0)),
+    user=Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
     _: bool = Depends(enforce_rate_limit("documents")),
 ):
     """
     Upload un fichier avec classification automatique du domaine.
-    
+
     Si un domaine est fourni, il sera utilisé directement.
     Sinon, le domaine sera détecté automatiquement à partir du contenu.
     """
     import logging
+
     logger = logging.getLogger(__name__)
-    
+
     # Log pour debug
-    logger.info(f"Upload reçu - tags: {tags}, domain: {domain}, access_level_id: {access_level_id}, quality_level_id: {quality_level_id}")
-    
+    logger.info(
+        f"Upload reçu - tags: {tags}, domain: {domain}, access_level_id: {access_level_id}, quality_level_id: {quality_level_id}"
+    )
+
     # Convertir les chaînes vides en None
-    if tags == '':
+    if tags == "":
         tags = None
-    if domain == '':
+    if domain == "":
         domain = None
-    
+
     # Convertir access_level_id et quality_level_id en entiers
     # FormData envoie toujours des strings, donc on doit les convertir
     # Si None ou chaîne vide, utiliser les valeurs par défaut (1 = public/draft)
-    if access_level_id is None or (isinstance(access_level_id, str) and not access_level_id.strip()):
+    if access_level_id is None or (
+        isinstance(access_level_id, str) and not access_level_id.strip()
+    ):
         access_level_id = 1
     else:
         try:
             access_level_id = int(access_level_id)
         except (ValueError, TypeError):
             access_level_id = 1
-    
-    if quality_level_id is None or (isinstance(quality_level_id, str) and not quality_level_id.strip()):
+
+    if quality_level_id is None or (
+        isinstance(quality_level_id, str) and not quality_level_id.strip()
+    ):
         quality_level_id = 1
     else:
         try:
             quality_level_id = int(quality_level_id)
         except (ValueError, TypeError):
             quality_level_id = 1
-    
+
     max_size = settings.max_file_size_mb * 1024 * 1024
     if settings.enable_file_validation:
         content_bytes = await file.read(max_size + 1)
@@ -255,7 +302,7 @@ async def upload_file_with_classification(
     # La classification se fera en arrière-plan si nécessaire
     detected_domain = domain
     classification_result = None
-    
+
     if not domain:
         # Pour les gros fichiers PDF, on évite l'extraction synchrone
         # On utilisera "general" par défaut et la classification se fera en arrière-plan
@@ -266,47 +313,49 @@ async def upload_file_with_classification(
                 "domain": "general",
                 "confidence": 0.5,
                 "alternatives": [],
-                "note": "Classification différée pour gros fichier"
+                "note": "Classification différée pour gros fichier",
             }
         else:
             try:
                 # Extraire le texte pour la classification (seulement pour petits fichiers)
-                text = extract_text_from_bytes(content_bytes, file.filename, file.content_type)
+                text = extract_text_from_bytes(
+                    content_bytes, file.filename, file.content_type
+                )
                 if text and text.strip():
                     classification_result = classify_document(
                         text=text,
                         filename=sanitized_filename,
-                        mime_type=file.content_type
+                        mime_type=file.content_type,
                     )
                     detected_domain = classification_result["domain"]
-            except Exception as e:
+            except Exception:
                 # Si la classification échoue, utiliser "general"
                 detected_domain = "general"
                 classification_result = {
                     "domain": "general",
                     "confidence": 0.3,
-                    "alternatives": []
+                    "alternatives": [],
                 }
-    
+
     # Si pas de classification effectuée, créer un résultat par défaut
     if not classification_result:
         classification_result = {
             "domain": detected_domain or "general",
             "confidence": 1.0 if domain else 0.5,
-            "alternatives": []
+            "alternatives": [],
         }
-    
+
     # Sauvegarder le fichier
     sanitized_name = f"{uuid.uuid4()}_{sanitized_filename}"
     storage_path = settings.data_dir / str(org["id"]) / sanitized_name
     storage_path.parent.mkdir(parents=True, exist_ok=True)
     storage_path.write_bytes(content_bytes)
-    
+
     # Créer l'entrée document avec le domaine dans les tags
     tags_list = parse_tags(tags) or []
     if domain and domain != "general":
         tags_list.append(f"domain:{domain}")
-    
+
     source_type = detect_source_type(sanitized_filename, file.content_type)
     doc_id, version = create_document_entry(
         db,
@@ -321,24 +370,32 @@ async def upload_file_with_classification(
         access_level_id=access_level_id or 1,
         quality_level_id=quality_level_id or 1,
     )
-    
+
     # Enqueue dans Celery ou BackgroundTasks avec domaine forcé
-    task_id = enqueue_document_ingestion(doc_id, org["id"], str(storage_path), file.content_type, domain=domain, background_tasks=background_tasks)
-    
+    enqueue_document_ingestion(
+        doc_id,
+        org["id"],
+        str(storage_path),
+        file.content_type,
+        domain=domain,
+        background_tasks=background_tasks,
+    )
+
     return DocumentUploadWithClassificationResponse(
         document_id=doc_id,
         version=version,
         status="queued",
         chunk_count=0,
-        classification=classification_result
+        classification=classification_result,
     )
+
 
 @domain_router.get("/{document_id}/status")
 def get_document_status_domain(
     domain: str,
     document_id: int,
-    org = Depends(require_active_org(0)),
-    user = Depends(get_current_user),
+    org=Depends(require_active_org(0)),
+    user=Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Récupérer le statut d'ingestion d'un document (route multi-domaines)."""
@@ -351,10 +408,10 @@ def get_document_status_domain(
         "SELECT ingestion_status, ingestion_error, chunk_count FROM documents WHERE id = ? AND organization_id = ?",
         (document_id, org["id"]),
     ).fetchone()
-    
+
     if not doc:
         raise HTTPException(status_code=404, detail="Document non trouvé")
-    
+
     return {
         "document_id": document_id,
         "domain": domain,

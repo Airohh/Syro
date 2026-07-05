@@ -42,4 +42,3 @@ from . import tasks  # noqa: E402, F401
 
 if __name__ == "__main__":
     celery_app.start()
-

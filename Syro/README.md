@@ -104,7 +104,7 @@ cp .env.example .env
 # Quick start (dev/demo): API + Worker + Qdrant + Redis + MLflow
 docker-compose up -d
 
-# Production (full stack): + Frontend + Postgres + Prometheus/Grafana
+# Production (full stack): + Frontend (Prometheus optionnel, à décommenter)
 docker-compose -f infra/docker-compose.yml up -d
 
 # With local Ollama LLM

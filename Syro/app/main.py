@@ -9,7 +9,6 @@ from .domains import get_domain_config, list_domains
 from .routers import admin, agents, auth, chat, documents, mlops, profile, permissions
 from .services.vector_store import VectorStoreError
 from .middleware import (
-    setup_logging,
     CorrelationIDMiddleware,
     MetricsMiddleware,
     setup_tracing,
@@ -18,7 +17,9 @@ from .middleware import (
 from .security import SecurityHeadersMiddleware
 
 
-def resolve_cors_settings(raw_origins: str, requested_credentials: bool) -> tuple[list[str], bool]:
+def resolve_cors_settings(
+    raw_origins: str, requested_credentials: bool
+) -> tuple[list[str], bool]:
     """Parse les origines CORS et neutralise la combinaison invalide wildcard+credentials.
 
     Wildcard "*" + credentials est rejeté par les navigateurs (toute requête
@@ -36,17 +37,20 @@ async def lifespan(app: FastAPI):
     settings.validate_production_secrets()
     try:
         from scripts.init_db import init_db
+
         init_db()
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).warning("DB init skipped: %s", e)
     yield
+
 
 # Configurer le tracing OpenTelemetry
 setup_tracing(
     service_name=settings.app_name.lower(),
     otlp_endpoint=settings.otlp_endpoint,
-    enabled=settings.tracing_enabled
+    enabled=settings.tracing_enabled,
 )
 
 domain_config = get_domain_config(settings.domain)
@@ -59,7 +63,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url=None,
     openapi_url="/openapi.json",
-    swagger_ui_parameters={"tryItOutEnabled": True}
+    swagger_ui_parameters={"tryItOutEnabled": True},
 )
 
 # Middlewares d'observabilité (ordre important : correlation ID d'abord, puis metrics)
@@ -100,6 +104,7 @@ app.include_router(admin.router)
 app.include_router(agents.router)
 app.include_router(mlops.router)
 
+
 @app.exception_handler(VectorStoreError)
 async def vector_store_error_handler(request: Request, exc: VectorStoreError):
     return JSONResponse(
@@ -107,9 +112,10 @@ async def vector_store_error_handler(request: Request, exc: VectorStoreError):
         content={
             "error": "Qdrant connection failed",
             "message": str(exc),
-            "solution": "Please ensure Qdrant is running: docker-compose up -d qdrant"
-        }
+            "solution": "Please ensure Qdrant is running: docker-compose up -d qdrant",
+        },
     )
+
 
 @app.get("/health")
 def healthcheck():
@@ -120,23 +126,27 @@ def healthcheck():
         "app_name": domain_config.name,
     }
 
+
 @app.get("/domains/{domain}/health")
 def healthcheck_domain(domain: str):
     """Healthcheck pour un domaine spécifique."""
     from fastapi import HTTPException
+
     domain_config = get_domain_config(domain)
     # Si le domaine n'existe pas, get_domain_config retourne "general" par défaut
     # Vérifier si le domaine demandé existe vraiment
     from .domains import DOMAINS
+
     if domain.lower() not in DOMAINS:
         raise HTTPException(status_code=404, detail=f"Domain '{domain}' not found")
-    
+
     return {
         "status": "ok",
         "domain": domain,
         "app_name": domain_config.name,
         "description": domain_config.description,
     }
+
 
 @app.get("/domains")
 def get_domains():
@@ -149,6 +159,7 @@ def get_domains():
         },
         "available_domains": list_domains(),
     }
+
 
 @app.get("/metrics")
 def metrics():

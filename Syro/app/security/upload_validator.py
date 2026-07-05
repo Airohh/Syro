@@ -1,9 +1,6 @@
 """Validation stricte des fichiers uploadés."""
 
 from fastapi import HTTPException, UploadFile, status
-from typing import List
-
-from ..config import settings
 
 # Types MIME autorisés
 ALLOWED_MIME_TYPES = {
@@ -28,8 +25,19 @@ ALLOWED_MIME_TYPES = {
 
 # Extensions autorisées (backup si MIME type échoue)
 ALLOWED_EXTENSIONS = {
-    ".txt", ".md", ".csv", ".json", ".xml", ".html",
-    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".txt",
+    ".md",
+    ".csv",
+    ".json",
+    ".xml",
+    ".html",
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
 }
 
 # Taille maximale par défaut (100 MB)
@@ -38,9 +46,12 @@ MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 # Taille maximale pour texte brut (10 MB)
 MAX_TEXT_SIZE = 10 * 1024 * 1024  # 10 MB
 
+
 class UploadValidationError(Exception):
     """Exception pour erreurs de validation d'upload."""
+
     pass
+
 
 def validate_file_size(file: UploadFile, max_size: int = MAX_FILE_SIZE) -> None:
     """

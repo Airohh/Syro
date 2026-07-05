@@ -3,7 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import sqlite3
 
@@ -13,23 +13,29 @@ from ..db import db_session
 from .file_extractor import extract_text_from_bytes
 from .rag import index_document_content
 
+
 def _serialize_tags(tags: Sequence[str] | None) -> str | None:
     if not tags:
         return None
     return json.dumps(list(dict.fromkeys([tag.strip() for tag in tags if tag.strip()])))
+
 
 def parse_tags(raw: str | None) -> list[str] | None:
     if not raw:
         return None
     return [tag.strip() for tag in raw.split(",") if tag.strip()]
 
-def compute_next_version(db: sqlite3.Connection, organization_id: int, filename: str) -> int:
+
+def compute_next_version(
+    db: sqlite3.Connection, organization_id: int, filename: str
+) -> int:
     row = db.execute(
         "SELECT MAX(version) FROM documents WHERE organization_id = ? AND filename = ?",
         (organization_id, filename),
     ).fetchone()
     current = row[0] if row and row[0] else 0
     return current + 1
+
 
 def create_document_entry(
     db: sqlite3.Connection,
@@ -67,8 +73,19 @@ def create_document_entry(
     )
     return cur.lastrowid, version
 
-def queue_ingestion(background_tasks: BackgroundTasks, document_id: int, organization_id: int, storage_path: str, mime_type: str | None, domain: str | None = None) -> None:
-    background_tasks.add_task(process_document, document_id, organization_id, storage_path, mime_type, domain)
+
+def queue_ingestion(
+    background_tasks: BackgroundTasks,
+    document_id: int,
+    organization_id: int,
+    storage_path: str,
+    mime_type: str | None,
+    domain: str | None = None,
+) -> None:
+    background_tasks.add_task(
+        process_document, document_id, organization_id, storage_path, mime_type, domain
+    )
+
 
 _TYPE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("snowflake", ("snowflake", "snow")),
@@ -80,7 +97,9 @@ _TYPE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
-def infer_metadata(filename: str, tags: list[str], source_type: str, domain: str | None = None) -> dict:
+def infer_metadata(
+    filename: str, tags: list[str], source_type: str, domain: str | None = None
+) -> dict:
     """Construit les métadonnées d'un chunk (type/difficulté) à partir du nom de
     fichier et des tags. Source unique partagée par le worker Celery et le
     fallback BackgroundTasks (évite la divergence d'inférence)."""
@@ -90,7 +109,11 @@ def infer_metadata(filename: str, tags: list[str], source_type: str, domain: str
 
     filename_lower = filename.lower()
     metadata["type"] = next(
-        (label for label, keywords in _TYPE_KEYWORDS if any(k in filename_lower for k in keywords)),
+        (
+            label
+            for label, keywords in _TYPE_KEYWORDS
+            if any(k in filename_lower for k in keywords)
+        ),
         "general",
     )
 
@@ -104,7 +127,13 @@ def infer_metadata(filename: str, tags: list[str], source_type: str, domain: str
     return metadata
 
 
-def run_ingestion(document_id: int, organization_id: int, storage_path: str, mime_type: str | None, domain: str | None = None) -> int:
+def run_ingestion(
+    document_id: int,
+    organization_id: int,
+    storage_path: str,
+    mime_type: str | None,
+    domain: str | None = None,
+) -> int:
     """Cœur d'ingestion partagé (extract → métadonnées → index Qdrant).
 
     Lève en cas d'échec ; la gestion du statut/metrics/retry est laissée à
@@ -128,15 +157,25 @@ def run_ingestion(document_id: int, organization_id: int, storage_path: str, mim
         tags = json.loads(doc_row["tags"]) if doc_row["tags"] else []
     except (json.JSONDecodeError, TypeError):
         tags = []
-    metadata = infer_metadata(doc_row["filename"], tags, doc_row["source_type"] or "unknown", domain)
+    metadata = infer_metadata(
+        doc_row["filename"], tags, doc_row["source_type"] or "unknown", domain
+    )
 
     return index_document_content(document_id, organization_id, text, metadata=metadata)
 
 
-def process_document(document_id: int, organization_id: int, storage_path: str, mime_type: str | None, domain: str | None = None) -> None:
+def process_document(
+    document_id: int,
+    organization_id: int,
+    storage_path: str,
+    mime_type: str | None,
+    domain: str | None = None,
+) -> None:
     """Fallback BackgroundTasks : ingestion synchrone + maj statut DB."""
     try:
-        chunk_count = run_ingestion(document_id, organization_id, storage_path, mime_type, domain)
+        chunk_count = run_ingestion(
+            document_id, organization_id, storage_path, mime_type, domain
+        )
         with db_session() as conn:
             conn.execute(
                 "UPDATE documents SET ingestion_status = 'complete', chunk_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -148,6 +187,7 @@ def process_document(document_id: int, organization_id: int, storage_path: str, 
                 "UPDATE documents SET ingestion_status = 'failed', ingestion_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (str(exc), document_id),
             )
+
 
 def checksum_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()

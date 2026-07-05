@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 from ..db import db_session
 from ..config import settings
-
-logger = logging.getLogger(__name__)
-from .llm import get_embedding_vector
 from .vector_store import VectorStore, VectorStoreError
 from .hybrid_search import hybrid_search
 from .chunker import chunk_text_hierarchical
 from .bm25_search import bm25_search
 from .mlops_tracker import get_mlops_tracker
 from .domain_detector import detect_domain_from_document
+
+if TYPE_CHECKING:
+    import numpy as np
+
+logger = logging.getLogger(__name__)
+
 
 def index_document_content(
     document_id: int,
@@ -25,25 +28,27 @@ def index_document_content(
     metadata: dict[str, Any] | None = None,
 ) -> int:
     start_time = time.time()
-    
+
     detected_domain = detect_domain_from_document(text_content)
     if metadata and "domain" in metadata:
         detected_domain = metadata["domain"]
-    
+
     chunk_data = chunk_text_hierarchical(
         text_content,
         chunk_size=400,
         overlap=60,
         respect_headers=True,
     )
-    
+
     vector_store = VectorStore()
-    
+
     try:
         vector_store.delete_chunks_by_document(document_id, domain=detected_domain)
     except VectorStoreError as e:
-        logger.warning("Could not delete existing chunks for doc %d: %s", document_id, e)
-    
+        logger.warning(
+            "Could not delete existing chunks for doc %d: %s", document_id, e
+        )
+
     chunk_payloads: list[dict[str, Any]] = []
     with db_session() as conn:
         conn.execute("DELETE FROM doc_chunks WHERE document_id = ?", (document_id,))
@@ -58,16 +63,18 @@ def index_document_content(
             )
             chunk_id = chunk_cur.lastrowid
 
-            chunk_payloads.append({
-                "chunk_id": f"{organization_id}_{document_id}_{chunk_id}",
-                "text": chunk_text,
-                "metadata": {
-                    "chunk_index": chunk_index,
-                    "header": chunk_info.get("header", ""),
-                    "level": chunk_info.get("level", 0),
-                    **(metadata or {}),
-                },
-            })
+            chunk_payloads.append(
+                {
+                    "chunk_id": f"{organization_id}_{document_id}_{chunk_id}",
+                    "text": chunk_text,
+                    "metadata": {
+                        "chunk_index": chunk_index,
+                        "header": chunk_info.get("header", ""),
+                        "level": chunk_info.get("level", 0),
+                        **(metadata or {}),
+                    },
+                }
+            )
 
     # Indexation Qdrant en un seul lot (embeddings + upsert groupés) après le
     # commit SQLite. En cas d'échec Qdrant, SQLite garde les chunks : on logue
@@ -83,7 +90,9 @@ def index_document_content(
         except VectorStoreError as e:
             logger.error(
                 "Failed to batch-index doc %d (%d chunks) in Qdrant — SQLite/Qdrant out of sync: %s",
-                document_id, len(chunk_payloads), e,
+                document_id,
+                len(chunk_payloads),
+                e,
             )
 
     bm25_search.mark_for_rebuild(organization_id)
@@ -92,7 +101,7 @@ def index_document_content(
         from .semantic_cache import semantic_cache
 
         semantic_cache.invalidate_domain(organization_id, detected_domain)
-    
+
     tracker = get_mlops_tracker()
     if tracker.enabled:
         ingestion_time_ms = (time.time() - start_time) * 1000
@@ -104,8 +113,9 @@ def index_document_content(
             document_size_chars=len(text_content),
             metadata=metadata,
         )
-    
+
     return len(chunk_data)
+
 
 def retrieve_chunks_with_metadata(
     organization_id: int,
@@ -215,6 +225,7 @@ def retrieve_chunks_with_metadata(
         )
     except VectorStoreError:
         return []
+
 
 def retrieve_chunks(
     organization_id: int,

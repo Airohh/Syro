@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..config import settings
 from .hybrid_search import hybrid_search
 from .query_rewriter import expand_queries
 from .retrieval_scoring import normalize_rrf_score
+
+if TYPE_CHECKING:
+    import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -83,9 +86,13 @@ def _merge_chunk_lists(
     for chunk in primary + secondary:
         cid = str(chunk["chunk_id"])
         existing = by_id.get(cid)
-        if existing is None or float(chunk.get("score", 0)) > float(existing.get("score", 0)):
+        if existing is None or float(chunk.get("score", 0)) > float(
+            existing.get("score", 0)
+        ):
             by_id[cid] = chunk
-    merged = sorted(by_id.values(), key=lambda c: float(c.get("score", 0)), reverse=True)
+    merged = sorted(
+        by_id.values(), key=lambda c: float(c.get("score", 0)), reverse=True
+    )
     return merged[:top_k]
 
 

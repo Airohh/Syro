@@ -11,6 +11,7 @@ from __future__ import annotations
 import threading
 import time
 
+
 class CircuitBreaker:
     """Breaker thread-safe à trois états implicites : closed / open / half-open.
 

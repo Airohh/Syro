@@ -91,10 +91,10 @@ S'y ajoute une **dette technique ciblée** : duplication ingestion (worker vs se
 | Chunking hiérarchique | ✅ | ✅ | À parité |
 | Multi-tenant / permissions | ✅ (fort) | partiel | **Au-dessus** |
 | Observabilité infra | ✅ | ✅ | À parité |
-| Query understanding | ❌ | ✅ | **Retard** |
-| Agentique (CRAG/Self-RAG) | ❌ | ✅ | **Retard** |
-| Tracing RAG (Langfuse) | ❌ | ✅ | **Retard** |
-| Golden set ≥ 100 + éval CI | ❌ (~20) | ✅ | **Retard** |
+| Query understanding | 🟡 | Livré (rewriting, HyDE) — **off par défaut**, ablation en cours |
+| Agentique (CRAG/Self-RAG) | 🟡 | Livré (opt-in) — **off par défaut** |
+| Tracing RAG (Langfuse) | 🟡 | Livré (opt-in) — **off par défaut** |
+| Golden set ≥ 100 + éval CI | 🟡 | 100 paires ; gate intégrité en CI ; gate retrieval = stack live |
 | Multimodal (tables/images) | ❌ | ✅ | **Retard** |
 
 **Lecture** : la base est solide et même différenciante sur la gouvernance. Les écarts sont concentrés sur les couches « intelligence de requête + mesure + agentique », qui sont précisément le sujet des 3 premières phases.
@@ -393,7 +393,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 
 #### T4.2 — SQLite → PostgreSQL
 - **P2 · Story · 13 SP · backlog · BE · dépend : T4.1**
-- **Pourquoi** : SQLite limite la concurrence API+worker ; `postgres` déjà dans le compose.
+- **Pourquoi** : SQLite limite la concurrence API+worker ; service `postgres` esquissé (commenté) dans le compose.
 - **Étapes** : couche d'accès compatible PG ; migrations Alembic ; bascule config + tests d'intégration PG.
 - **Fichiers** : `app/db.py`, `db/`, `scripts/init_db.py`, config.
 - **Acceptation** : suite verte sur PostgreSQL ; charge worker concurrente OK.

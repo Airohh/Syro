@@ -7,8 +7,9 @@ services:
       - LLM_PROVIDER=openai
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
-    # Pas de dépendance Ollama
     depends_on:
-      - qdrant
-      - postgres
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
