@@ -1,17 +1,17 @@
 """Tâches Celery pour le worker async."""
 
+import logging
 import sys
+import time
 from pathlib import Path
 
 # Ajouter le chemin de l'API pour importer les modules partagés
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from .main import celery_app
-from app.db import db_session
-from app.services.ingestion import run_ingestion
-import logging
-import time
+from .main import celery_app  # noqa: E402
+from app.db import db_session  # noqa: E402
+from app.services.ingestion import run_ingestion  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,6 @@
 """Middleware pour traces OpenTelemetry."""
 
-from typing import Callable
 
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
 
 try:
     from opentelemetry import trace

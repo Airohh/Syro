@@ -4,7 +4,6 @@ Gère les niveaux d'accès (confidentialité) et de qualité des documents.
 """
 
 import sqlite3
-from typing import Optional
 from ..db import db_session
 
 def get_user_permissions(

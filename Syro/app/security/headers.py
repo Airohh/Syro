@@ -1,8 +1,7 @@
 """Headers de sécurité HTTP."""
 
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import Message
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Middleware pour ajouter des headers de sécurité HTTP."""

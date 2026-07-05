@@ -1,7 +1,6 @@
 """Agent endpoints for personalized assistants."""
 
 from fastapi import APIRouter, Depends, HTTPException, Body
-from typing import Any
 from pydantic import BaseModel
 
 from ..dependencies import get_current_user, require_active_org

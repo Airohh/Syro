@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 import sqlite3
-from typing import Optional
 
 from ..dependencies import get_current_user, get_current_org, get_db
 from ..schemas import (
@@ -10,7 +9,6 @@ from ..schemas import (
     QualityLevel,
     UserPermissions,
     UserPermissionsUpdate,
-    DocumentShare,
 )
 from ..services.permissions_service import (
     get_user_permissions,

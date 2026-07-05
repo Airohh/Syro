@@ -8,7 +8,6 @@ from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import Message
 
 # Logger structuré JSON
 class JSONFormatter(logging.Formatter):

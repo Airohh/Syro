@@ -9,7 +9,6 @@ from .domains import get_domain_config, list_domains
 from .routers import admin, agents, auth, chat, documents, mlops, profile, permissions
 from .services.vector_store import VectorStoreError
 from .middleware import (
-    setup_logging,
     CorrelationIDMiddleware,
     MetricsMiddleware,
     setup_tracing,

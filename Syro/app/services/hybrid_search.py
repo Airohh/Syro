@@ -9,8 +9,6 @@ from typing import Any
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
-
 from ..config import settings
 from .llm import get_embedding_vector, get_embedding_vectors
 from .vector_store import VectorStore, VectorStoreError
@@ -18,6 +16,8 @@ from .bm25_search import bm25_search
 from .reranker import reranker
 from .query_rewriter import expand_queries
 from .hyde import get_hyde_embedding_vector
+
+logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=4)
 atexit.register(_executor.shutdown, wait=False)

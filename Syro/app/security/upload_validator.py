@@ -1,9 +1,7 @@
 """Validation stricte des fichiers uploadés."""
 
 from fastapi import HTTPException, UploadFile, status
-from typing import List
 
-from ..config import settings
 
 # Types MIME autorisés
 ALLOWED_MIME_TYPES = {

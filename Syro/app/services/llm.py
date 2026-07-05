@@ -9,15 +9,6 @@ from typing import Sequence
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
-
-# Fix encoding for Windows console
-if sys.platform == "win32":
-    try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    except (AttributeError, ValueError):
-        pass
-
 try:
     from langchain_openai import OpenAIEmbeddings, ChatOpenAI  # type: ignore
     from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
@@ -30,6 +21,15 @@ except ImportError:  # pragma: no cover - optional dependency
 from ..config import settings
 from ..domains import get_domain_config
 from .circuit_breaker import CircuitBreaker
+
+logger = logging.getLogger(__name__)
+
+# Fix encoding for Windows console
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError):
+        pass
 
 _embedding_cache: OrderedDict[str, np.ndarray] = OrderedDict()
 _cache_max_size = settings.embedding_cache_size if settings.embedding_cache_enabled else 0

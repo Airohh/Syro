@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
 
-from ..domains import DOMAINS, get_domain_config
 
 DOMAIN_KEYWORDS: dict[str, list[str]] = {
     "tech": [

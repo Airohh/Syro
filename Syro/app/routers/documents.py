@@ -14,17 +14,13 @@ from ..services.ingestion import (
 )
 from ..services.celery_client import enqueue_document_ingestion
 from ..services.file_extractor import detect_source_type, extract_text_from_bytes
-from ..services.document_classifier import classify_document, should_ask_confirmation
+from ..services.document_classifier import classify_document
 from ..services.permissions_service import get_user_permissions
 from ..services.vector_store import VectorStore, VectorStoreError
 from ..services.bm25_search import bm25_search
 from ..schemas import DocumentUploadWithClassificationResponse
 from ..db import get_db
 from ..domains import DOMAINS
-from ..security import (
-    MAX_FILE_SIZE,
-    MAX_TEXT_SIZE,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +126,7 @@ def upload_text_document(
         quality_level_id=1,  # Par défaut: draft
     )
     # Enqueue dans Celery ou BackgroundTasks
-    task_id = enqueue_document_ingestion(doc_id, org["id"], str(storage_path), "text/plain", domain=None, background_tasks=background_tasks)
+    enqueue_document_ingestion(doc_id, org["id"], str(storage_path), "text/plain", domain=None, background_tasks=background_tasks)
     return DocumentUploadResponse(document_id=doc_id, version=version, status="queued", chunk_count=0)
 
 @router.post("/files", response_model=DocumentUploadResponse)
@@ -177,7 +173,7 @@ async def upload_file(
         )
         # Enqueue dans Celery ou BackgroundTasks
         # Si Celery/Redis n'est pas disponible, cela basculera automatiquement vers BackgroundTasks (non-bloquant)
-        task_id = enqueue_document_ingestion(doc_id, org["id"], str(storage_path), file.content_type, domain=None, background_tasks=background_tasks)
+        enqueue_document_ingestion(doc_id, org["id"], str(storage_path), file.content_type, domain=None, background_tasks=background_tasks)
         return DocumentUploadResponse(document_id=doc_id, version=version, status="queued", chunk_count=0)
     except Exception as e:
         import logging
@@ -279,7 +275,7 @@ async def upload_file_with_classification(
                         mime_type=file.content_type
                     )
                     detected_domain = classification_result["domain"]
-            except Exception as e:
+            except Exception:
                 # Si la classification échoue, utiliser "general"
                 detected_domain = "general"
                 classification_result = {
@@ -323,7 +319,7 @@ async def upload_file_with_classification(
     )
     
     # Enqueue dans Celery ou BackgroundTasks avec domaine forcé
-    task_id = enqueue_document_ingestion(doc_id, org["id"], str(storage_path), file.content_type, domain=domain, background_tasks=background_tasks)
+    enqueue_document_ingestion(doc_id, org["id"], str(storage_path), file.content_type, domain=domain, background_tasks=background_tasks)
     
     return DocumentUploadWithClassificationResponse(
         document_id=doc_id,

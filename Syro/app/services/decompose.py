@@ -10,11 +10,14 @@ import logging
 import re
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..config import settings
 from .hybrid_search import hybrid_search
 from .reranker import reranker
+
+if TYPE_CHECKING:
+    import numpy as np
 
 logger = logging.getLogger(__name__)
 

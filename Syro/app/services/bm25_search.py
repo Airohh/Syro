@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
-from typing import Any, Sequence
+from typing import Any
 
 from rank_bm25 import BM25Okapi
 

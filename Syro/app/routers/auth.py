@@ -5,7 +5,6 @@ import sqlite3
 from ..db import get_db
 from ..schemas import Token
 from ..security import verify_password, create_access_token
-from ..dependencies import enforce_rate_limit
 from ..security.rate_limiter import auth_rate_limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])

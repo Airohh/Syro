@@ -128,7 +128,7 @@ def send_message_stream(
         except Exception as e:
             logger.error("Streaming error: %s", e, exc_info=True)
             db.rollback()
-            yield f"data: [ERROR]\n\n"
+            yield "data: [ERROR]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -244,6 +244,6 @@ def send_message_stream_for_domain(
         except Exception as e:
             logger.error("Domain streaming error: %s", e, exc_info=True)
             db.rollback()
-            yield f"data: [ERROR]\n\n"
+            yield "data: [ERROR]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")

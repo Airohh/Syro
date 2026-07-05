@@ -68,7 +68,7 @@ def enforce_rate_limit(scope: str):
             if not allowed:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Rate limit exceeded. Try again later.",
+                    detail="Rate limit exceeded. Try again later.",
                     headers={"X-RateLimit-Remaining": "0"}
                 )
             return True
@@ -81,7 +81,7 @@ def enforce_rate_limit(scope: str):
         if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded. Try again later.",
+                detail="Rate limit exceeded. Try again later.",
                 headers={"X-RateLimit-Remaining": "0"}
             )
         return True

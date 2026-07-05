@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any
-
-_benchmark_lock = threading.Lock()
 
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
@@ -14,6 +11,8 @@ from ..services.mlops_tracker import get_mlops_tracker
 from ..services.mlops_alerts import get_mlops_alerts
 from ..services.chat import build_answer
 from ..config import settings
+
+_benchmark_lock = threading.Lock()
 
 router = APIRouter(prefix="/mlops", tags=["mlops"])
 

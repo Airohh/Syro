@@ -4,19 +4,21 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 from ..db import db_session
 from ..config import settings
-
-logger = logging.getLogger(__name__)
-from .llm import get_embedding_vector
 from .vector_store import VectorStore, VectorStoreError
 from .hybrid_search import hybrid_search
 from .chunker import chunk_text_hierarchical
 from .bm25_search import bm25_search
 from .mlops_tracker import get_mlops_tracker
 from .domain_detector import detect_domain_from_document
+
+if TYPE_CHECKING:
+    import numpy as np
+
+logger = logging.getLogger(__name__)
 
 def index_document_content(
     document_id: int,

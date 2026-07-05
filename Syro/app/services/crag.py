@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..config import settings
 from .hybrid_search import hybrid_search
 from .query_rewriter import expand_queries
 from .retrieval_scoring import normalize_rrf_score
+
+if TYPE_CHECKING:
+    import numpy as np
 
 logger = logging.getLogger(__name__)
 
