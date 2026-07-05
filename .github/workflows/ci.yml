@@ -32,6 +32,10 @@ jobs:
         TRANSFORMERS_OFFLINE: "1"
       run: pytest tests/ -v --tb=short
 
+    - name: Golden set integrity gate (T1.4)
+      working-directory: ./Syro
+      run: python evaluation/validate_golden_set.py
+
   lint:
     runs-on: ubuntu-latest
     
@@ -51,11 +55,9 @@ jobs:
     
     - name: Run Ruff
       working-directory: ./Syro
-      run: |
-        ruff check app/ worker/ --output-format=github || true
+      run: ruff check app/ worker/
 
     - name: Check code formatting with Black
       working-directory: ./Syro
-      run: |
-        black --check app/ worker/ || true
+      run: black --check app/ worker/
 

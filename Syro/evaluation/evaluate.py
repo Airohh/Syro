@@ -3,9 +3,10 @@
 Usage:
     cd Syro/Syro   (the directory containing the app/ folder)
     python evaluation/evaluate.py
+    python evaluation/evaluate.py --retrieval-only   # retrieval metrics only (no LLM)
 
 Requirements:
-    pip install -r evaluation/requirements-eval.txt
+    pip install -r evaluation/requirements-eval.txt   # full RAGAS only
 
 LLM judge:
     By default RAGAS uses OpenAI (set OPENAI_API_KEY env var).
@@ -14,6 +15,7 @@ LLM judge:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -89,6 +91,60 @@ def run_pipeline(
     return answer, contexts, doc_ids
 
 
+def run_retrieval_only(dataset_raw: list[dict]) -> dict:
+    """Retrieval live sans LLM ni RAGAS — écrit report.json pour le gate T1.4."""
+    id_to_name = _load_doc_filenames()
+    retrieval_items: list[dict] = []
+    times: list[float] = []
+
+    for i, item in enumerate(dataset_raw):
+        question = item["question"]
+        domain = item.get("domain")
+        print(f"[{i+1:02d}/{len(dataset_raw)}] {question[:70]}...")
+
+        t0 = time.perf_counter()
+        results = retrieve_chunks_with_metadata(
+            organization_id=ORGANIZATION_ID,
+            query=question,
+            domain=domain,
+        )
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        times.append(elapsed_ms)
+        retrieved_ids = _retrieved_doc_ids(results, id_to_name)
+        print(f"         → {len(results)} chunks, {elapsed_ms:.0f}ms")
+
+        retrieval_items.append({
+            "retrieved_ids": retrieved_ids,
+            "relevant_ids": item.get("relevant_doc_ids", []),
+            "intent": item.get("intent", "unlabeled"),
+        })
+
+    retrieval_report = retrieval_metrics.aggregate_retrieval(retrieval_items)
+    avg_ms = sum(times) / len(times) if times else 0.0
+
+    print("\n" + "=" * 44)
+    print("Retrieval metrics (live, deterministic, no LLM)")
+    print("=" * 44)
+    for key in ("recall@5", "recall@10", "ndcg@10", "mrr", "hit@5", "oob_refusal_rate"):
+        val = retrieval_report.get(key)
+        if val is not None and val == val:
+            print(f"  {key:<22} {val:.4f}")
+    print(f"  ranked {retrieval_report['n_ranked']}/{retrieval_report['n_total']}  | avg {avg_ms:.0f} ms/q")
+    print("=" * 44)
+
+    output = {
+        "retrieval_metrics": retrieval_report,
+        "avg_pipeline_latency_ms": round(avg_ms, 1),
+        "n_questions": len(dataset_raw),
+        "mode": "retrieval_only",
+    }
+    report_path = EVAL_DIR / "report.json"
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+    print(f"\nResults saved → {report_path}")
+    return output
+
+
 # ---------------------------------------------------------------------------
 # RAGAS LLM/Embeddings configuration
 # ---------------------------------------------------------------------------
@@ -147,17 +203,28 @@ def _build_ragas_embeddings():
 # Main
 # ---------------------------------------------------------------------------
 def main() -> dict:
+    parser = argparse.ArgumentParser(description="Syro RAG evaluation (RAGAS + retrieval metrics)")
+    parser.add_argument(
+        "--retrieval-only",
+        action="store_true",
+        help="Mesure retrieval live uniquement (pas de LLM/RAGAS) → report.json",
+    )
+    args = parser.parse_args()
+
+    with open(DATASET_PATH, encoding="utf-8") as f:
+        dataset_raw = json.load(f)
+
+    print(f"Dataset loaded: {len(dataset_raw)} questions\n")
+
+    if args.retrieval_only:
+        return run_retrieval_only(dataset_raw)
+
     try:
         from ragas import evaluate, EvaluationDataset
         from ragas.metrics import Faithfulness, AnswerRelevancy, ContextRecall, ContextPrecision
     except ImportError:
         print("ERROR: ragas is not installed. Run: pip install -r evaluation/requirements-eval.txt")
         sys.exit(1)
-
-    with open(DATASET_PATH, encoding="utf-8") as f:
-        dataset_raw = json.load(f)
-
-    print(f"Dataset loaded: {len(dataset_raw)} questions\n")
 
     ragas_llm = _build_ragas_llm()
     ragas_embeddings = _build_ragas_embeddings()

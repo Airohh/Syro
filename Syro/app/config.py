@@ -1,9 +1,11 @@
 ﻿from pathlib import Path
 from typing import Any
 try:
-    from pydantic_settings import BaseSettings
+    from pydantic_settings import BaseSettings, SettingsConfigDict
 except ImportError:
     from pydantic import BaseSettings
+
+    SettingsConfigDict = None  # type: ignore[misc, assignment]
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -117,9 +119,17 @@ class Settings(BaseSettings):
     enable_file_validation: bool = True  # Valider strictement les types MIME
     enable_security_headers: bool = True  # Ajouter les headers de sécurité HTTP
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    if SettingsConfigDict is not None:
+        model_config = SettingsConfigDict(
+            env_file=".env",
+            case_sensitive=False,
+            extra="ignore",  # ignore clés .env non déclarées (ex. POSTGRES_PASSWORD Docker)
+        )
+    else:
+        class Config:
+            env_file = ".env"
+            case_sensitive = False
+            extra = "ignore"
     
     def get_fast_mode_config(self) -> dict[str, Any]:
         return dict(_PERFORMANCE_MODE_CONFIGS["fast"])

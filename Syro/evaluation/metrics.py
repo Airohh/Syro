@@ -104,4 +104,14 @@ def aggregate_retrieval(items: list[dict], ks: tuple[int, ...] = (5, 10)) -> dic
 
     by_intent = Counter(it.get("intent", "unlabeled") for it in items)
     report["by_intent"] = dict(by_intent)
+
+    # Alias plats pour validate_retrieval_thresholds.py (recall_at_10 vs recall@10).
+    for k in ks:
+        if f"recall@{k}" in report:
+            report[f"recall_at_{k}"] = report[f"recall@{k}"]
+        if f"ndcg@{k}" in report:
+            report[f"ndcg_at_{k}"] = report[f"ndcg@{k}"]
+        if f"hit@{k}" in report:
+            report[f"hit_at_{k}"] = report[f"hit@{k}"]
+
     return report

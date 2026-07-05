@@ -53,3 +53,12 @@ class TestAggregate:
         assert rep["oob_refusal_rate"] == 0.5
         assert rep["n_oob"] == 2
         assert rep["by_intent"]["out_of_corpus"] == 2
+
+    def test_aggregate_emits_gate_aliases(self):
+        items = [
+            {"retrieved_ids": ["d1"], "relevant_ids": ["d1"], "intent": "factual_lookup"},
+        ]
+        rep = metrics.aggregate_retrieval(items, ks=(5, 10))
+        assert rep["recall@10"] == rep["recall_at_10"]
+        assert rep["ndcg@10"] == rep["ndcg_at_10"]
+        assert rep["hit@5"] == rep["hit_at_5"]

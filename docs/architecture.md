@@ -1,14 +1,7 @@
 # Architecture Syro — état actuel
 
-> **⚠️ Statut de ce document : description de l'état réel, PAS un backlog.**
-> Ce fichier était à l'origine un design doc pré-build (phases ⬜ à faire). La
-> plupart de ces phases sont aujourd'hui implémentées. Le **plan d'exécution
-> vivant** (tickets, sprints, priorités, gaps) est :
->
-> 👉 **[`CHANGEMENTS/ROADMAP_RAG.md`](../CHANGEMENTS/ROADMAP_RAG.md)**
->
-> Ne pas utiliser ce fichier comme source de vérité pour « ce qu'il reste à
-> faire » — se référer à la roadmap.
+> **Statut** : description de l'état réel du code (pas un backlog).
+> Plan d'exécution vivant : **[`CHANGEMENTS/ROADMAP_RAG.md`](../CHANGEMENTS/ROADMAP_RAG.md)**
 
 ---
 
@@ -16,17 +9,22 @@
 
 Syro est un RAG hybride multi-domaines : FastAPI + Qdrant (dense) + BM25
 (sparse), fusion RRF, reranking cross-encoder, ingestion async Celery,
-observabilité Prometheus/OpenTelemetry, éval RAGAS.
+observabilité Prometheus/OpenTelemetry/Langfuse (opt-in), éval RAGAS + golden set 100 paires.
 
 ```
 Question
    │
    ▼
-┌──────────────────┐   auto-détection mots-clés (domain_detector.py)
-│  Domain routing  │   ou domaine forcé (/domains/{domain}/chat)
+┌──────────────────┐   mots-clés (domain_detector.py) ou route /domains/{domain}/chat
+│  Domain routing  │   ADR-001 : mono-API, 1 base URL (VITE_API_URL)
 └────────┬─────────┘
          │
-   ┌─────┴─────┐  recherche parallèle (ThreadPoolExecutor)
+   ┌─────┴──────────────────────────────────────┐
+   │  Query understanding (opt-in, flags)      │
+   │  rewriting · HyDE · décomposition · CRAG   │
+   └────────┬─────────────────────────────────┘
+         │
+   ┌─────┴─────┐  recherche parallèle
    ▼           ▼
 ┌──────┐   ┌──────┐
 │Vector│   │ BM25 │   embedding KO → dégradation BM25-only
@@ -34,17 +32,16 @@ Question
 └──┬───┘   └──┬───┘
    └────┬─────┘
         ▼
-┌───────────────┐   Reciprocal Rank Fusion (rrf_k, immune aux échelles)
-│  RRF fusion   │
+┌───────────────┐   Reciprocal Rank Fusion (rrf_k=60)
+│  RRF fusion   │   hybrid_search_alpha déprécié (ignoré)
 └───────┬───────┘
         ▼
-┌───────────────┐   bge-reranker-v2-m3 (GPU/CPU auto, fallback ordre RRF)
+┌───────────────┐   bge-reranker-v2-m3 (opt-in via enable_reranking)
 │  Cross-encoder│
-│  rerank       │
 └───────┬───────┘
         ▼
-┌───────────────┐   prompt par domaine (mono) ou adaptatif (multi)
-│  LLM answer   │
+┌───────────────┐   Self-RAG filter (opt-in) + historique conversation (T2.5)
+│  LLM answer   │   cache sémantique retrieval (opt-in, T4.5)
 └───────────────┘
 ```
 
@@ -54,30 +51,33 @@ Question
 
 | Capacité | État | Où / Note |
 |----------|------|-----------|
-| Détection de domaine | 🟢 | `domain_detector.py` — **mots-clés**, pas de modèle ML |
-| Recherche multi-domaines | 🟢 | `multi_domain_rag.py`, appelé par `chat.py` si >1 domaine détecté |
-| Fusion résultats | 🟢 | RRF dans `hybrid_search.py` (`alpha` déprécié/ignoré) |
-| Fusion multi-domaines | 🟡 | tri par **score × confiance**, PAS un 2ᵉ rerank cross-encoder global |
-| Reranking | 🟢 | cross-encoder `bge-reranker-v2-m3`, blend score RRF × `rerank_weight` |
-| Métadonnée `domain` sur chunks | 🟢 | `worker/tasks.py` / `rag.py` → `metadata["domain"]` |
-| Prompts adaptatifs | 🟢 | `get_adaptive_prompt()` (multi-domaine) |
-| Résilience chat (500) | 🟢 | embedding KO → BM25-only ; voir `docs/diagnostic-chat-500.md` |
-| Config domaines **par organisation** | 🔴 | pas de colonne `organizations.domains` ; domaine = config globale + détection |
-| Cache de classification | 🔴 | absent |
-| Query understanding (rewriting/HyDE) | 🔴 | question brute envoyée au retrieval → roadmap T2.1/T2.2 |
-| Historique conversationnel dans le RAG | 🟡 | stocké (`conversations`/`messages`) mais **jamais injecté** dans `build_answer`/prompt → roadmap T2.5 |
-| Cache sémantique | 🔴 | absent → roadmap T4.5 |
-| Agentique (CRAG/Self-RAG) | 🔴 | `agent.py` = persona, pas d'orchestration → roadmap E3 |
-| Golden set + éval CI | 🟡 | ~20 paires → roadmap T1.1–T1.4 |
-| Tracing RAG (Langfuse) | 🔴 | MLflow ≠ trace par requête → roadmap T1.3 |
+| Détection de domaine | 🟢 | `domain_detector.py` — mots-clés (pas de modèle ML) |
+| Recherche multi-domaines | 🟢 | `multi_domain_rag.py`, `chat.py` |
+| Fusion résultats | 🟢 | RRF dans `hybrid_search.py` |
+| Reranking | 🟢 | `bge-reranker-v2-m3`, blend RRF × `rerank_weight` |
+| Query rewriting | 🟡 | `query_rewriter.py` — **off par défaut** (`enable_query_rewriting`) |
+| HyDE | 🟡 | `hyde.py` — **off par défaut** |
+| CRAG / Self-RAG / décomposition | 🟡 | `crag.py`, `self_rag.py`, `decompose.py` — **off par défaut** |
+| Historique conversationnel | 🟢 | `load_conversation_history` → retrieval + prompt LLM (T2.5) |
+| Cache sémantique retrieval | 🟡 | `semantic_cache.py` — **off par défaut** |
+| Tracing RAG (Langfuse) | 🟡 | `langfuse_tracer.py` — **off par défaut**, profil Docker optionnel |
+| Golden set + gates CI | 🟡 | 100 paires, gate intégrité en CI ; gate retrieval = stack live |
+| Éval retrieval vs génération | 🟢 | `metrics.py` + `evaluate.py` ; `--retrieval-only` sans LLM |
+| Modèle multi-domaines | 🟢 | ADR-001 Accepted : mono-API |
+| Persistance métadonnées | 🟡 | SQLite (`db.py`) ; Postgres dans compose **commenté** (non branché) |
+| BM25 | 🟡 | In-memory par processus ; fingerprint SQL pour invalidation cross-worker |
+| Ingestion multimodale | 🔴 | Texte seul ; tableaux/images DOCX non extraits |
+| Config domaines par org | 🔴 | Domaine = config globale + détection |
 
-## Décision multi-domaines (non tranchée)
+## Évaluation
 
-Deux modèles coexistent sans ADR : multi-instances par ports
-(`frontend/utils/domainPorts.ts`) **et** multi-domaines 1 API
-(`DOMAIN=general` + collections/filtres Qdrant). Arbitrage = roadmap **T0.4**
-(ADR-001).
+| Commande | Rôle |
+|----------|------|
+| `make eval-gate` | Intégrité golden set (CI, sans stack) |
+| `make eval-retrieval` | Retrieval live → `report.json` (Qdrant + embeddings) |
+| `make eval-retrieval-gate` | Seuils sur `report.json` |
+| `make eval` | RAGAS complet (LLM judge) |
 
 ---
 
-Pour le détail des gaps, priorités, tickets et sprints : **[`CHANGEMENTS/ROADMAP_RAG.md`](../CHANGEMENTS/ROADMAP_RAG.md)**.
+Détail tickets et sprints : **[`CHANGEMENTS/ROADMAP_RAG.md`](../CHANGEMENTS/ROADMAP_RAG.md)**

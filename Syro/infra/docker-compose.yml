@@ -34,8 +34,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
     networks:
       - syro-network
     restart: unless-stopped
@@ -71,8 +69,6 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
     networks:
       - syro-network
@@ -136,26 +132,26 @@ services:
       timeout: 5s
       retries: 3
 
-  # Postgres (optionnel, pour remplacer SQLite)
-  postgres:
-    image: postgres:16-alpine
-    container_name: syro-postgres
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB:-syro}
-      - POSTGRES_USER=${POSTGRES_USER:-syro}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - syro-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U syro"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # Postgres — non utilisé (app = SQLite). Décommenter quand la couche Postgres sera branchée.
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: syro-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     - POSTGRES_DB=${POSTGRES_DB:-syro}
+  #     - POSTGRES_USER=${POSTGRES_USER:-syro}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - syro-network
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U syro"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
   # Prometheus (optionnel - décommenter pour activer)
   # prometheus:
@@ -208,8 +204,8 @@ volumes:
     driver: local
   redis_data:
     driver: local
-  postgres_data:
-    driver: local
+  # postgres_data:  # Décommenter si Postgres est activé
+  #   driver: local
   api_data:
     driver: local
   api_db:

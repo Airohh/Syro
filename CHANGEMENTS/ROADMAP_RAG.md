@@ -91,10 +91,10 @@ S'y ajoute une **dette technique ciblée** : duplication ingestion (worker vs se
 | Chunking hiérarchique | ✅ | ✅ | À parité |
 | Multi-tenant / permissions | ✅ (fort) | partiel | **Au-dessus** |
 | Observabilité infra | ✅ | ✅ | À parité |
-| Query understanding | ❌ | ✅ | **Retard** |
-| Agentique (CRAG/Self-RAG) | ❌ | ✅ | **Retard** |
-| Tracing RAG (Langfuse) | ❌ | ✅ | **Retard** |
-| Golden set ≥ 100 + éval CI | ❌ (~20) | ✅ | **Retard** |
+| Query understanding | 🟡 | Livré (rewriting, HyDE) — **off par défaut**, ablation en cours |
+| Agentique (CRAG/Self-RAG) | 🟡 | Livré (opt-in) — **off par défaut** |
+| Tracing RAG (Langfuse) | 🟡 | Livré (opt-in) — **off par défaut** |
+| Golden set ≥ 100 + éval CI | 🟡 | 100 paires ; gate intégrité en CI ; gate retrieval = stack live |
 | Multimodal (tables/images) | ❌ | ✅ | **Retard** |
 
 **Lecture** : la base est solide et même différenciante sur la gouvernance. Les écarts sont concentrés sur les couches « intelligence de requête + mesure + agentique », qui sont précisément le sujet des 3 premières phases.

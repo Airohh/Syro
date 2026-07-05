@@ -49,11 +49,12 @@ API: `http://localhost:8000` — Swagger docs at `/docs`.
 
 ## Evaluation
 
-Syro ships a reproducible RAGAS evaluation suite (20 Q/A pairs, Tech + MLOps domains) measuring faithfulness, answer relevancy, context recall, and context precision:
+Syro ships a reproducible RAGAS evaluation suite (100 Q/A pairs, Tech + MLOps domains, 4 intent buckets) measuring faithfulness, answer relevancy, context recall, and context precision:
 
 ```bash
 pip install -r Syro/evaluation/requirements-eval.txt
-python Syro/evaluation/evaluate.py
+python Syro/evaluation/evaluate.py              # full RAGAS + retrieval metrics
+python Syro/evaluation/evaluate.py --retrieval-only  # retrieval only (no LLM)
 ```
 
 ## Known limitations
