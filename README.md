@@ -59,7 +59,7 @@ python Syro/evaluation/evaluate.py --retrieval-only  # retrieval only (no LLM)
 
 ## Known limitations
 
-- **SQLite** for metadata: fine for a single-node deployment, not for horizontal scaling (Postgres compose profile exists in `infra/` but is not the default).
+- **SQLite** for metadata: fine for a single-node deployment, not for horizontal scaling (a Postgres service is sketched but commented out in `infra/docker-compose.yml` — migration tracked as T4.2).
 - **BM25 index is in-memory** and rebuilt per process: large corpora (>100k chunks) will increase startup time and RAM usage.
 - **Multi-tenancy is logical** (organization-scoped queries), not physical isolation — no per-tenant quotas or billing.
 - **Language**: chunking and BM25 tokenization are tuned for English/French prose; no CJK support.

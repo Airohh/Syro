@@ -393,7 +393,7 @@ Principe directeur 2026 : *« fix chunking → hybrid → reranker → eval set 
 
 #### T4.2 — SQLite → PostgreSQL
 - **P2 · Story · 13 SP · backlog · BE · dépend : T4.1**
-- **Pourquoi** : SQLite limite la concurrence API+worker ; `postgres` déjà dans le compose.
+- **Pourquoi** : SQLite limite la concurrence API+worker ; service `postgres` esquissé (commenté) dans le compose.
 - **Étapes** : couche d'accès compatible PG ; migrations Alembic ; bascule config + tests d'intégration PG.
 - **Fichiers** : `app/db.py`, `db/`, `scripts/init_db.py`, config.
 - **Acceptation** : suite verte sur PostgreSQL ; charge worker concurrente OK.
