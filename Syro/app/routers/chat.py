@@ -31,6 +31,7 @@ def _sse(chunk: str) -> str:
     body = "".join(f"data: {line}\n" for line in chunk.split("\n"))
     return f"{body}\n"
 
+
 @router.post("/message", response_model=MessageResponse)
 def send_message(
     payload: MessageCreate,
@@ -50,8 +51,10 @@ def send_message(
         )
         history = load_conversation_history(db, conversation_id)
         store_message(db, conversation_id, "user", payload.content, user["id"])
-        
-        logger.info(f"Building answer for org {org['id']}, query: {payload.content[:50]}...")
+
+        logger.info(
+            f"Building answer for org {org['id']}, query: {payload.content[:50]}..."
+        )
         answer, usage, sources = build_answer(
             org["id"],
             payload.content,
@@ -59,7 +62,7 @@ def send_message(
             user_id=user["id"],
             conversation_history=history,
         )
-        
+
         store_message(db, conversation_id, "assistant", answer, None)
         db.execute(
             "INSERT INTO usage_events (organization_id, user_id, event_type, amount, metadata) VALUES (?, ?, ?, ?, ?)",
@@ -70,7 +73,7 @@ def send_message(
             (usage, org["id"]),
         )
         db.commit()
-        
+
         return MessageResponse(
             conversation_id=conversation_id,
             message=answer,
@@ -78,13 +81,16 @@ def send_message(
             sources=sources,
         )
     except Exception as e:
-        logger.error(f"Error in send_message: {type(e).__name__}: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error in send_message: {type(e).__name__}: {str(e)}", exc_info=True
+        )
         db.rollback()
         # Détails de l'exception réservés aux logs (pas d'info disclosure côté client)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erreur lors du traitement du message. Consultez les logs serveur.",
         )
+
 
 @router.post("/message/stream")
 def send_message_stream(
@@ -131,6 +137,7 @@ def send_message_stream(
             yield "data: [ERROR]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
 
 @domain_router.post("/message", response_model=MessageResponse)
 def send_message_for_domain(
@@ -193,6 +200,7 @@ def send_message_for_domain(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erreur lors du traitement du message. Consultez les logs serveur.",
         )
+
 
 @domain_router.post("/message/stream")
 def send_message_stream_for_domain(

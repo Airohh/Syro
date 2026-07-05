@@ -58,6 +58,9 @@ def filter_relevant_chunks(
         )
 
     for rel, chunk in kept_pairs:
-        chunk["metadata"] = {**(chunk.get("metadata") or {}), "self_rag_relevance": round(rel, 4)}
+        chunk["metadata"] = {
+            **(chunk.get("metadata") or {}),
+            "self_rag_relevance": round(rel, 4),
+        }
 
     return [chunk for _, chunk in kept_pairs]

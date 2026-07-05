@@ -1,5 +1,6 @@
 ﻿from pathlib import Path
 from typing import Any
+
 try:
     from pydantic_settings import BaseSettings, SettingsConfigDict
 except ImportError:
@@ -25,6 +26,7 @@ _PERFORMANCE_MODE_CONFIGS: dict[str, dict[str, Any]] = {
         "hybrid_search_alpha": 0.7,
     },
 }
+
 
 class Settings(BaseSettings):
     app_name: str = "Syro"
@@ -55,14 +57,18 @@ class Settings(BaseSettings):
     adaptive_fast_threshold_ms: float = 3000.0
     adaptive_quality_threshold_ms: float = 1500.0
     adaptive_window_size: int = 5
-    hybrid_search_alpha: float = 0.7  # déprécié : la fusion utilise désormais RRF (rang)
+    hybrid_search_alpha: float = (
+        0.7  # déprécié : la fusion utilise désormais RRF (rang)
+    )
     rrf_k: int = 60  # constante de lissage Reciprocal Rank Fusion (standard = 60)
     retrieval_top_k: int = 10
     rerank_top_k: int = 5
     enable_reranking: bool = True
     rerank_weight: float = 0.7
     enable_query_rewriting: bool = False  # T2.1 : reformulations avant retrieval
-    query_rewrite_max_variants: int = 2  # reformulations LLM max (hors question originale)
+    query_rewrite_max_variants: int = (
+        2  # reformulations LLM max (hors question originale)
+    )
     enable_hyde: bool = False  # T2.2 : vecteur de recherche depuis passage hypothétique
     enable_crag: bool = False  # T3.1 : retrieval correctif si pertinence faible
     crag_retry_threshold: float = 0.25  # score combiné sous ce seuil → retry
@@ -74,7 +80,9 @@ class Settings(BaseSettings):
     self_rag_max_chunks: int = 8  # maximum injecté dans le prompt
     enable_query_decomposition: bool = False  # T3.3 : décomposition multi-hop
     query_decomposition_max_subqueries: int = 3
-    enable_semantic_cache: bool = False  # T4.5 : cache retrieval par similarité embedding
+    enable_semantic_cache: bool = (
+        False  # T4.5 : cache retrieval par similarité embedding
+    )
     semantic_cache_similarity_threshold: float = 0.95
     semantic_cache_max_entries: int = 500
     semantic_cache_ttl_seconds: int = 3600
@@ -94,12 +102,14 @@ class Settings(BaseSettings):
     mlops_alerts_email_from: str | None = None
     mlops_alerts_email_to: str | None = None
     mlops_alerts_webhook_url: str | None = None
-    
+
     # Celery configuration (pour worker async)
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/0"
-    celery_task_always_eager: bool = False  # True pour désactiver Celery en dev (tâches synchrones)
-    
+    celery_task_always_eager: bool = (
+        False  # True pour désactiver Celery en dev (tâches synchrones)
+    )
+
     # Observabilité
     log_level: str = "INFO"
     log_json_format: bool = True  # True pour logs JSON structurés
@@ -110,7 +120,7 @@ class Settings(BaseSettings):
     langfuse_host: str = "http://localhost:3000"
     langfuse_public_key: str | None = None
     langfuse_secret_key: str | None = None
-    
+
     # Sécurité
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_allow_credentials: bool = True
@@ -126,11 +136,12 @@ class Settings(BaseSettings):
             extra="ignore",  # ignore clés .env non déclarées (ex. POSTGRES_PASSWORD Docker)
         )
     else:
+
         class Config:
             env_file = ".env"
             case_sensitive = False
             extra = "ignore"
-    
+
     def get_fast_mode_config(self) -> dict[str, Any]:
         return dict(_PERFORMANCE_MODE_CONFIGS["fast"])
 
@@ -140,7 +151,9 @@ class Settings(BaseSettings):
     def apply_performance_mode(self) -> None:
         # "adaptive" démarre sur le profil quality puis ajuste à chaud (cf
         # adaptive_performance.py) ; les modes inconnus restent sur les défauts.
-        profile = "quality" if self.performance_mode == "adaptive" else self.performance_mode
+        profile = (
+            "quality" if self.performance_mode == "adaptive" else self.performance_mode
+        )
         config = _PERFORMANCE_MODE_CONFIGS.get(profile)
         if config is None:
             return
@@ -154,6 +167,7 @@ class Settings(BaseSettings):
                 "SECRET_KEY uses the insecure default in production (debug=False). "
                 "Set a strong SECRET_KEY env var before deploying."
             )
+
 
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)

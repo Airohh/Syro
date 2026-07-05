@@ -27,12 +27,14 @@ logger = logging.getLogger(__name__)
 # Fix encoding for Windows console
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
 
 _embedding_cache: OrderedDict[str, np.ndarray] = OrderedDict()
-_cache_max_size = settings.embedding_cache_size if settings.embedding_cache_enabled else 0
+_cache_max_size = (
+    settings.embedding_cache_size if settings.embedding_cache_enabled else 0
+)
 
 
 def _history_block(conversation_history: Sequence[str] | None) -> str:
@@ -56,9 +58,11 @@ class LLMProvider:
             failure_threshold=settings.circuit_breaker_threshold,
             reset_timeout=settings.circuit_breaker_reset_seconds,
         )
-        
+
         # Use Ollama by default (free and local)
-        if self._provider == "ollama" or (self._provider != "openai" and not settings.openai_api_key):
+        if self._provider == "ollama" or (
+            self._provider != "openai" and not settings.openai_api_key
+        ):
             self._setup_ollama()
         # Fallback to OpenAI if explicitly requested and API key is provided
         elif self._provider == "openai" and settings.openai_api_key:
@@ -66,16 +70,16 @@ class LLMProvider:
         # Default to Ollama if no preference
         else:
             self._setup_ollama()
-    
+
     def _setup_ollama(self) -> None:
         """Configure Ollama (free, local LLM) with optional GPU support."""
         if not OpenAIEmbeddings or not ChatOpenAI:
             return
-        
+
         # Ollama uses OpenAI-compatible API, so we can use the same clients
         # Just point to Ollama's base URL
         base_url = settings.ollama_base_url or "http://localhost:11434/v1"
-        
+
         try:
             # GPU info purement cosmétique (Ollama gère son propre placement
             # device) : un simple check torch.cuda pour le log, sans sondes
@@ -84,6 +88,7 @@ class LLMProvider:
             if settings.ollama_use_gpu:
                 try:
                     import torch
+
                     if torch.cuda.is_available():
                         gpu_info = f" (GPU: {torch.cuda.get_device_name(0)})"
                 except Exception:
@@ -110,18 +115,22 @@ class LLMProvider:
                 max_retries=settings.llm_max_retries,
             )
             self._has_llm = True
-            logger.info("Ollama configured: %s at %s%s", settings.chat_model, base_url, gpu_info)
+            logger.info(
+                "Ollama configured: %s at %s%s", settings.chat_model, base_url, gpu_info
+            )
         except Exception as e:
-            logger.warning("Ollama setup failed — embeddings and chat unavailable: %s", e)
-    
+            logger.warning(
+                "Ollama setup failed — embeddings and chat unavailable: %s", e
+            )
+
     def _setup_openai(self) -> None:
         """Configure OpenAI (paid, cloud-based)."""
         if not OpenAIEmbeddings or not ChatOpenAI:
             return
-        
+
         if not settings.openai_api_key:
             return
-        
+
         try:
             self._embedder = OpenAIEmbeddings(
                 model=settings.embeddings_model,
@@ -141,7 +150,9 @@ class LLMProvider:
             self._has_llm = True
             logger.info("OpenAI configured: %s", settings.chat_model)
         except Exception as e:
-            logger.warning("OpenAI setup failed — embeddings and chat unavailable: %s", e)
+            logger.warning(
+                "OpenAI setup failed — embeddings and chat unavailable: %s", e
+            )
 
     @staticmethod
     def _fake_embed(text: str) -> np.ndarray:
@@ -179,13 +190,13 @@ class LLMProvider:
             self._embed_breaker.record_failure()
             raise
         self._embed_breaker.record_success()
-        
+
         if settings.embedding_cache_enabled and _cache_max_size > 0 and cache_key:
             if len(_embedding_cache) >= _cache_max_size:
                 _embedding_cache.popitem(last=False)
             _embedding_cache[cache_key] = result
             _embedding_cache.move_to_end(cache_key)
-        
+
         return result
 
     def embed_many(self, texts: Sequence[str]) -> list[np.ndarray]:
@@ -251,14 +262,19 @@ class LLMProvider:
         context_block = "\n\n".join(
             f"[Source {i+1}]\n{chunk}" for i, chunk in enumerate(context_chunks)
         )
-        
+
         domain_to_use = domain or settings.domain
         domain_config = get_domain_config(domain_to_use)
         system_prompt = domain_config.system_prompt
 
         history_block = _history_block(conversation_history)
-        
-        if self._chat_model and HumanMessage and SystemMessage and self._chat_breaker.allow():
+
+        if (
+            self._chat_model
+            and HumanMessage
+            and SystemMessage
+            and self._chat_breaker.allow()
+        ):
             try:
                 messages = [
                     SystemMessage(content=system_prompt),
@@ -270,23 +286,33 @@ class LLMProvider:
                     ),
                 ]
                 response = self._chat_model.invoke(messages)
-                text = response.content if isinstance(response.content, str) else str(response.content)
+                text = (
+                    response.content
+                    if isinstance(response.content, str)
+                    else str(response.content)
+                )
                 usage = 0
                 if hasattr(response, "usage_metadata") and response.usage_metadata:
                     usage = int(response.usage_metadata.get("total_tokens", 0))
                 if usage == 0:
-                    usage = len(question.split()) + sum(len(chunk.split()) for chunk in context_chunks)
+                    usage = len(question.split()) + sum(
+                        len(chunk.split()) for chunk in context_chunks
+                    )
                 self._chat_breaker.record_success()
                 return text, usage
             except Exception as e:
                 self._chat_breaker.record_failure()
                 logger.warning("LLM invoke failed: %s", e, exc_info=True)
 
-        provider_status = "Ollama unavailable" if self._provider == "ollama" else "LLM not configured"
+        provider_status = (
+            "Ollama unavailable" if self._provider == "ollama" else "LLM not configured"
+        )
         fallback = f"LLM unavailable ({provider_status}).\n\nQuestion: {question}\n\nContext:\n{context_block or 'No documents indexed.'}"
-        usage = len(question.split()) + sum(len(chunk.split()) for chunk in context_chunks)
+        usage = len(question.split()) + sum(
+            len(chunk.split()) for chunk in context_chunks
+        )
         return fallback, usage
-    
+
     def chat_stream(
         self,
         question: str,
@@ -297,14 +323,19 @@ class LLMProvider:
         context_block = "\n\n".join(
             f"[Source {i+1}]\n{chunk}" for i, chunk in enumerate(context_chunks)
         )
-        
+
         domain_to_use = domain or settings.domain
         domain_config = get_domain_config(domain_to_use)
         system_prompt = domain_config.system_prompt
 
         history_block = _history_block(conversation_history)
-        
-        if self._chat_model and HumanMessage and SystemMessage and self._chat_breaker.allow():
+
+        if (
+            self._chat_model
+            and HumanMessage
+            and SystemMessage
+            and self._chat_breaker.allow()
+        ):
             try:
                 messages = [
                     SystemMessage(content=system_prompt),
@@ -328,7 +359,9 @@ class LLMProvider:
         else:
             yield "LLM not configured."
 
+
 provider = LLMProvider()
+
 
 def get_embedding_bytes(text: str) -> bytes:
     vec = provider.embed(text)
@@ -336,12 +369,15 @@ def get_embedding_bytes(text: str) -> bytes:
     buffer.write(vec.astype(np.float32).tobytes())
     return buffer.getvalue()
 
+
 def get_embedding_vector(text: str) -> np.ndarray:
     return provider.embed(text)
+
 
 def get_embedding_vectors(texts: Sequence[str]) -> list[np.ndarray]:
     """Embedding par lot (1 appel réseau). Voir `LLMProvider.embed_many`."""
     return provider.embed_many(texts)
+
 
 def answer_from_context(
     question: str,
@@ -349,7 +385,13 @@ def answer_from_context(
     domain: str | None = None,
     conversation_history: Sequence[str] | None = None,
 ) -> tuple[str, int]:
-    return provider.chat(question, context_chunks, domain=domain, conversation_history=conversation_history)
+    return provider.chat(
+        question,
+        context_chunks,
+        domain=domain,
+        conversation_history=conversation_history,
+    )
+
 
 def answer_from_context_stream(
     question: str,
@@ -359,5 +401,8 @@ def answer_from_context_stream(
 ):
     """Stream answer from context (generator)."""
     return provider.chat_stream(
-        question, context_chunks, domain=domain, conversation_history=conversation_history
+        question,
+        context_chunks,
+        domain=domain,
+        conversation_history=conversation_history,
     )

@@ -76,7 +76,9 @@ def _extract_pdf(content: bytes) -> str:
                             parts.append(md)
             return "\n\n".join(parts)
         except Exception as exc:
-            logger.warning("pdfplumber extraction failed, falling back to pypdf: %s", exc)
+            logger.warning(
+                "pdfplumber extraction failed, falling back to pypdf: %s", exc
+            )
             parts = []
 
     reader = PdfReader(io.BytesIO(content))
@@ -103,13 +105,18 @@ def _extract_docx(content: bytes) -> str:
     return "\n\n".join(parts)
 
 
-def extract_text_from_bytes(content: bytes, filename: str, content_type: Optional[str]) -> str:
+def extract_text_from_bytes(
+    content: bytes, filename: str, content_type: Optional[str]
+) -> str:
     ext = Path(filename).suffix.lower()
     if content_type in TEXT_TYPES or ext in {".txt", ".md", ".csv"}:
         return content.decode("utf-8", errors="ignore")
     if content_type == "application/pdf" or ext == ".pdf":
         return _extract_pdf(content)
-    if content_type in {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"} or ext in {".docx", ".doc"}:
+    if content_type in {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+    } or ext in {".docx", ".doc"}:
         return _extract_docx(content)
     return content.decode("utf-8", errors="ignore")
 

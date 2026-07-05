@@ -45,4 +45,3 @@ __all__ = [
     "setup_tracing",
     "get_tracer",
 ]
-

@@ -3,14 +3,17 @@
 from dataclasses import dataclass
 from typing import Any
 
+
 @dataclass
 class DomainConfig:
     """Configuration d'un domaine Syro."""
+
     name: str
     description: str
     system_prompt: str
     document_types: list[str]
     default_tags: list[str]
+
 
 DOMAINS: dict[str, DomainConfig] = {
     "tech": DomainConfig(
@@ -24,10 +27,20 @@ Instructions importantes :
 3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
 4. Réponds de manière claire, précise et structurée.
 5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=["snowflake", "pandas", "airflow", "databricks", "azure", "terraform", "sql", "python", "spark", "general"],
+        document_types=[
+            "snowflake",
+            "pandas",
+            "airflow",
+            "databricks",
+            "azure",
+            "terraform",
+            "sql",
+            "python",
+            "spark",
+            "general",
+        ],
         default_tags=["tech", "data-engineering", "python"],
     ),
-    
     "medical": DomainConfig(
         name="SyroMed",
         description="Assistant expert en médecine et santé",
@@ -39,10 +52,17 @@ Instructions importantes :
 3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
 4. Réponds de manière claire, précise et structurée.
 5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=["pathology", "treatment", "anatomy", "pharmacology", "protocol", "research", "general"],
+        document_types=[
+            "pathology",
+            "treatment",
+            "anatomy",
+            "pharmacology",
+            "protocol",
+            "research",
+            "general",
+        ],
         default_tags=["medical", "health", "medicine"],
     ),
-    
     "legal": DomainConfig(
         name="SyroLegal",
         description="Assistant expert en droit et jurisprudence",
@@ -54,10 +74,18 @@ Instructions importantes :
 3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
 4. Réponds de manière claire, précise et structurée.
 5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=["civil", "commercial", "penal", "jurisprudence", "contract", "regulation", "procedure", "general"],
+        document_types=[
+            "civil",
+            "commercial",
+            "penal",
+            "jurisprudence",
+            "contract",
+            "regulation",
+            "procedure",
+            "general",
+        ],
         default_tags=["legal", "law", "jurisprudence"],
     ),
-    
     "finance": DomainConfig(
         name="SyroFinance",
         description="Assistant expert en finance et comptabilité",
@@ -69,10 +97,18 @@ Instructions importantes :
 3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
 4. Réponds de manière claire, précise et structurée.
 5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=["analysis", "accounting", "investment", "markets", "tax", "portfolio", "economics", "general"],
+        document_types=[
+            "analysis",
+            "accounting",
+            "investment",
+            "markets",
+            "tax",
+            "portfolio",
+            "economics",
+            "general",
+        ],
         default_tags=["finance", "accounting", "investment"],
     ),
-    
     "education": DomainConfig(
         name="SyroEdu",
         description="Assistant expert en pédagogie et éducation",
@@ -84,10 +120,17 @@ Instructions importantes :
 3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
 4. Réponds de manière claire, précise et structurée.
 5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=["pedagogy", "curriculum", "assessment", "psychology", "resources", "didactics", "general"],
+        document_types=[
+            "pedagogy",
+            "curriculum",
+            "assessment",
+            "psychology",
+            "resources",
+            "didactics",
+            "general",
+        ],
         default_tags=["education", "pedagogy", "teaching"],
     ),
-    
     "mlops": DomainConfig(
         name="SyroMLOps",
         description="Assistant expert en MLOps et déploiement ML",
@@ -121,7 +164,6 @@ Instructions importantes :
         ],
         default_tags=["mlops", "machine-learning", "devops"],
     ),
-    
     "general": DomainConfig(
         name="Syro",
         description="Assistant généraliste polyvalent",
@@ -138,25 +180,27 @@ Instructions importantes :
     ),
 }
 
+
 def get_domain_config(domain: str | None = None) -> DomainConfig:
     """
     Get domain configuration.
-    
+
     Args:
         domain: Domain name (tech, medical, legal, finance, education, mlops, general)
                If None, returns 'general' domain.
-    
+
     Returns:
         DomainConfig instance
     """
     if domain is None:
         domain = "general"
-    
+
     domain_lower = domain.lower()
     if domain_lower not in DOMAINS:
         return DOMAINS["general"]
-    
+
     return DOMAINS[domain_lower]
+
 
 def list_domains() -> list[dict[str, Any]]:
     """List all available domains with their information."""

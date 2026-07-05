@@ -10,14 +10,15 @@ if TYPE_CHECKING:
 
 _celery_app: "Celery | None" = None
 
+
 def get_celery_app() -> "Celery":
     """Obtenir l'application Celery (singleton)."""
     global _celery_app
-    
+
     if _celery_app is None:
         try:
             from celery import Celery
-            
+
             _celery_app = Celery("syro_api")
             _celery_app.conf.update(
                 broker_url=settings.celery_broker_url,
@@ -32,13 +33,21 @@ def get_celery_app() -> "Celery":
             raise ImportError(
                 "Celery n'est pas installé. Installez-le avec: pip install celery redis"
             )
-    
+
     return _celery_app
 
-def enqueue_document_ingestion(document_id: int, organization_id: int, storage_path: str, mime_type: str | None = None, domain: str | None = None, background_tasks: Optional["BackgroundTasks"] = None) -> str:
+
+def enqueue_document_ingestion(
+    document_id: int,
+    organization_id: int,
+    storage_path: str,
+    mime_type: str | None = None,
+    domain: str | None = None,
+    background_tasks: Optional["BackgroundTasks"] = None,
+) -> str:
     """
     Enqueue une tâche d'ingestion de document.
-    
+
     Args:
         document_id: ID du document
         organization_id: ID de l'organisation
@@ -46,7 +55,7 @@ def enqueue_document_ingestion(document_id: int, organization_id: int, storage_p
         mime_type: Type MIME
         domain: Domaine forcé
         background_tasks: BackgroundTasks de FastAPI (optionnel, pour fallback)
-    
+
     Returns:
         str: Task ID Celery ou identifiant de tâche
     """
@@ -55,20 +64,39 @@ def enqueue_document_ingestion(document_id: int, organization_id: int, storage_p
         # Utiliser BackgroundTasks si disponible, sinon exécuter directement (non recommandé)
         if background_tasks:
             from ..services.ingestion import process_document
-            background_tasks.add_task(process_document, document_id, organization_id, storage_path, mime_type, domain)
+
+            background_tasks.add_task(
+                process_document,
+                document_id,
+                organization_id,
+                storage_path,
+                mime_type,
+                domain,
+            )
             return "background-task-execution"
         else:
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.warning("Celery désactivé et BackgroundTasks non disponible, exécution synchrone")
+            logger.warning(
+                "Celery désactivé et BackgroundTasks non disponible, exécution synchrone"
+            )
             from ..services.ingestion import process_document
+
             try:
-                process_document(document_id, organization_id, storage_path, mime_type, domain)
+                process_document(
+                    document_id, organization_id, storage_path, mime_type, domain
+                )
                 return "eager-execution"
             except Exception as e:
-                logger.error("Erreur traitement synchrone doc %s: %s", document_id, e, exc_info=True)
+                logger.error(
+                    "Erreur traitement synchrone doc %s: %s",
+                    document_id,
+                    e,
+                    exc_info=True,
+                )
                 return "eager-execution-error"
-    
+
     # Sinon, essayer d'utiliser Celery
     try:
         celery_app = get_celery_app()
@@ -80,21 +108,39 @@ def enqueue_document_ingestion(document_id: int, organization_id: int, storage_p
     except Exception as e:
         # Si Celery/Redis n'est pas disponible, utiliser BackgroundTasks comme fallback
         import logging
+
         logger = logging.getLogger(__name__)
-        logger.warning(f"Celery/Redis non disponible, basculement vers BackgroundTasks: {e}")
-        
+        logger.warning(
+            f"Celery/Redis non disponible, basculement vers BackgroundTasks: {e}"
+        )
+
         # Utiliser BackgroundTasks de FastAPI (non-bloquant)
         if background_tasks:
             from ..services.ingestion import process_document
-            background_tasks.add_task(process_document, document_id, organization_id, storage_path, mime_type, domain)
+
+            background_tasks.add_task(
+                process_document,
+                document_id,
+                organization_id,
+                storage_path,
+                mime_type,
+                domain,
+            )
             return "background-task-fallback"
         else:
             logger.error("BackgroundTasks non disponible, exécution synchrone")
             try:
                 from ..services.ingestion import process_document
-                process_document(document_id, organization_id, storage_path, mime_type, domain)
+
+                process_document(
+                    document_id, organization_id, storage_path, mime_type, domain
+                )
                 return "fallback-sync-execution"
             except Exception as process_error:
-                logger.error("Erreur traitement synchrone doc %s: %s", document_id, process_error, exc_info=True)
+                logger.error(
+                    "Erreur traitement synchrone doc %s: %s",
+                    document_id,
+                    process_error,
+                    exc_info=True,
+                )
                 return "fallback-sync-execution-error"
-

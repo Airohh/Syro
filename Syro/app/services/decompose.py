@@ -60,7 +60,9 @@ def _llm_decompose(query: str, history: Sequence[str] | None) -> list[str]:
     history_block = ""
     if history:
         recent = list(history)[-3:]
-        history_block = "Contexte récent:\n" + "\n".join(f"- {h}" for h in recent) + "\n\n"
+        history_block = (
+            "Contexte récent:\n" + "\n".join(f"- {h}" for h in recent) + "\n\n"
+        )
 
     system = (
         "Tu décomposes une question complexe en 2 à 3 sous-questions autonomes "
@@ -72,7 +74,11 @@ def _llm_decompose(query: str, history: Sequence[str] | None) -> list[str]:
         response = provider._chat_model.invoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
         )
-        text = response.content if isinstance(response.content, str) else str(response.content)
+        text = (
+            response.content
+            if isinstance(response.content, str)
+            else str(response.content)
+        )
         provider._chat_breaker.record_success()
     except Exception as exc:
         provider._chat_breaker.record_failure()
@@ -190,7 +196,9 @@ def retrieve_decomposed(
         )
 
     per_sub_k = min(settings.retrieval_top_k, max(top_k, 5))
-    logger.info("Query decomposition: %d subqueries for %r", len(subqueries), query[:80])
+    logger.info(
+        "Query decomposition: %d subqueries for %r", len(subqueries), query[:80]
+    )
 
     def _search_one(subquery: str) -> list[dict[str, Any]]:
         sub_embedding = query_embedding if subquery == query else None

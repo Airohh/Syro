@@ -13,7 +13,9 @@ from .permissions_service import filter_documents_by_permissions
 class RetrievalScope:
     """Scope appliqué avant vector/BM25 (pas après rerank)."""
 
-    allowed_document_ids: frozenset[int] | None  # None = pas de filtre doc (eval système)
+    allowed_document_ids: (
+        frozenset[int] | None
+    )  # None = pas de filtre doc (eval système)
 
 
 def get_accessible_document_ids(

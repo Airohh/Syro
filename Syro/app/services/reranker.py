@@ -14,6 +14,7 @@ try:
 except ImportError:
     np = None
 
+
 def _normalize_unit(scores: list[float]) -> list[float]:
     """Min-max vers [0,1] ; ex æquo (ou liste vide) → 1.0."""
     if not scores:
@@ -23,17 +24,19 @@ def _normalize_unit(scores: list[float]) -> list[float]:
         return [1.0] * len(scores)
     return [(s - lo) / (hi - lo) for s in scores]
 
+
 class Reranker:
     def __init__(self) -> None:
         self._model = None
         self._enabled = settings.enable_reranking
         self._cuda_available = None
-    
+
     def _check_cuda(self) -> bool:
         if self._cuda_available is not None:
             return self._cuda_available
         try:
             import torch
+
             self._cuda_available = torch.cuda.is_available()
             return self._cuda_available
         except ImportError:
@@ -43,19 +46,21 @@ class Reranker:
     def _load_model(self):
         if self._model is not None:
             return self._model
-        
+
         if not self._enabled:
             return None
-        
+
         try:
             from FlagEmbedding import FlagReranker
+
             try:
                 self._model = FlagReranker(
-                    'BAAI/bge-reranker-v2-m3',
+                    "BAAI/bge-reranker-v2-m3",
                     use_fp16=True,
-                    device='cuda' if self._check_cuda() else 'cpu',
+                    device="cuda" if self._check_cuda() else "cpu",
                 )
                 import logging as _logging
+
                 _logging.getLogger(__name__).info(
                     "Reranker loaded on %s", "GPU" if self._check_cuda() else "CPU"
                 )
@@ -75,28 +80,28 @@ class Reranker:
     ) -> list[dict[str, Any]]:
         """
         Rerank passages using cross-encoder model.
-        
+
         Args:
             query: Search query
             passages: List of passages with 'text' and other metadata
             top_k: Number of top results to return
-        
+
         Returns:
             Reranked list of passages with updated scores
         """
         if not passages:
             return []
-        
+
         if not self._enabled:
             # Return as-is if reranking disabled
             return passages[:top_k] if top_k else passages
-        
+
         model = self._load_model()
         if model is None:
             # Fallback: return original order (model not available)
             # This is expected if FlagEmbedding is not installed
             return passages[:top_k] if top_k else passages
-        
+
         try:
             # FlagReranker.compute_score : float pour une paire, liste/ndarray sinon.
             pairs = [(query, p["text"]) for p in passages]
@@ -124,7 +129,8 @@ class Reranker:
                 {
                     **passage,
                     "rerank_score": rerank_scores[i],
-                    "final_score": passage.get("score", 0.0) * (1 - w) + rerank_scores[i] * w,
+                    "final_score": passage.get("score", 0.0) * (1 - w)
+                    + rerank_scores[i] * w,
                 }
                 for i, passage in enumerate(passages)
             ]
@@ -135,6 +141,6 @@ class Reranker:
             logger.warning("Reranking failed, returning original order: %s", exc)
             return passages[:top_k] if top_k else passages
 
+
 # Global instance
 reranker = Reranker()
-

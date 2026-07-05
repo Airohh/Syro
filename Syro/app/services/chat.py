@@ -26,7 +26,9 @@ def _sources_from_chunks(chunk_results: list[dict[str, Any]]) -> list[dict[str, 
     ]
 
 
-def _filter_chunk_results(query: str, chunk_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _filter_chunk_results(
+    query: str, chunk_results: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     if not settings.enable_self_rag:
         return chunk_results
     from .self_rag import filter_relevant_chunks
@@ -34,7 +36,12 @@ def _filter_chunk_results(query: str, chunk_results: list[dict[str, Any]]) -> li
     return filter_relevant_chunks(query, chunk_results)
 
 
-def create_conversation_if_needed(db: sqlite3.Connection, organization_id: int, conversation_id: int | None, title: str | None = None) -> int:
+def create_conversation_if_needed(
+    db: sqlite3.Connection,
+    organization_id: int,
+    conversation_id: int | None,
+    title: str | None = None,
+) -> int:
     if conversation_id:
         return conversation_id
     cur = db.execute(
@@ -43,7 +50,14 @@ def create_conversation_if_needed(db: sqlite3.Connection, organization_id: int, 
     )
     return cur.lastrowid
 
-def store_message(db: sqlite3.Connection, conversation_id: int, sender_type: str, content: str, sender_id: int | None) -> int:
+
+def store_message(
+    db: sqlite3.Connection,
+    conversation_id: int,
+    sender_type: str,
+    content: str,
+    sender_id: int | None,
+) -> int:
     cur = db.execute(
         "INSERT INTO messages (conversation_id, sender_type, sender_id, content) VALUES (?, ?, ?, ?)",
         (conversation_id, sender_type, sender_id, content),
@@ -69,6 +83,7 @@ def load_conversation_history(
     ).fetchall()
     return [f"{row['sender_type']}: {row['content']}" for row in reversed(rows)]
 
+
 def _get_detected_domains(
     query: str,
     auto_detect_domain: bool | None,
@@ -86,9 +101,8 @@ def _get_detected_domains(
         # Explicit domain passed by API (e.g. /domains/{domain}/chat)
         return None, forced_domain
 
-    use_auto_detect = (
-        auto_detect_domain is True
-        or (auto_detect_domain is None and settings.domain == "general")
+    use_auto_detect = auto_detect_domain is True or (
+        auto_detect_domain is None and settings.domain == "general"
     )
 
     if use_auto_detect:
@@ -103,6 +117,7 @@ def _get_detected_domains(
         return detected_domains, primary_domain
 
     return None, settings.domain
+
 
 def build_answer(
     organization_id: int,
@@ -171,7 +186,11 @@ def build_answer(
         )
 
         context_chunks = [r["text"] for r in chunk_results]
-        sources = _sources_from_chunks(chunk_results) if (include_sources or multi_domain) else []
+        sources = (
+            _sources_from_chunks(chunk_results)
+            if (include_sources or multi_domain)
+            else []
+        )
 
         gen_t0 = time.time()
         try:
@@ -197,6 +216,7 @@ def build_answer(
                     rag_tokens_total,
                     rag_sources_retrieved,
                 )
+
                 rag_queries_total.labels(domain=domain_to_use, status="success").inc()
                 rag_query_duration_seconds.labels(domain=domain_to_use).observe(
                     response_time_ms / 1000.0
@@ -210,11 +230,15 @@ def build_answer(
                     prompt_tokens = 0
                     completion_tokens = 0
 
-                rag_tokens_total.labels(domain=domain_to_use, type="prompt").inc(prompt_tokens)
+                rag_tokens_total.labels(domain=domain_to_use, type="prompt").inc(
+                    prompt_tokens
+                )
                 rag_tokens_total.labels(domain=domain_to_use, type="completion").inc(
                     completion_tokens
                 )
-                rag_tokens_total.labels(domain=domain_to_use, type="total").inc(total_tokens)
+                rag_tokens_total.labels(domain=domain_to_use, type="total").inc(
+                    total_tokens
+                )
                 rag_sources_retrieved.labels(domain=domain_to_use).observe(len(sources))
             except ImportError:
                 pass
@@ -247,6 +271,7 @@ def build_answer(
             response_time_ms = (time.time() - gen_t0) * 1000
             try:
                 from ..middleware import rag_queries_total, rag_query_duration_seconds
+
                 rag_queries_total.labels(domain=domain_to_use, status="error").inc()
                 rag_query_duration_seconds.labels(domain=domain_to_use).observe(
                     response_time_ms / 1000.0
@@ -254,6 +279,7 @@ def build_answer(
             except ImportError:
                 pass
             raise
+
 
 def build_answer_stream(
     organization_id: int,
@@ -270,7 +296,7 @@ def build_answer_stream(
         forced_domain=domain,
     )
     scope = build_retrieval_scope(user_id, organization_id)
-    
+
     if detected_domains and len(detected_domains) > 1:
         chunk_results = search_multi_domain(
             organization_id=organization_id,
@@ -295,8 +321,11 @@ def build_answer_stream(
         chunk_results = _filter_chunk_results(query, chunk_results)
         context_chunks = [r["text"] for r in chunk_results]
         domain_to_use = primary_domain
-    
+
     for chunk in answer_from_context_stream(
-        query, context_chunks, domain=domain_to_use, conversation_history=conversation_history
+        query,
+        context_chunks,
+        domain=domain_to_use,
+        conversation_history=conversation_history,
     ):
         yield chunk

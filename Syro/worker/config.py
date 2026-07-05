@@ -30,9 +30,10 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 50
 # Import des settings de l'API pour partager la config
 try:
     import sys
+
     sys.path.insert(0, str(PROJECT_ROOT))
     from app.config import settings
-    
+
     # Utiliser les mêmes settings que l'API
     QDRANT_URL = settings.qdrant_url
     DB_PATH = settings.db_path
@@ -42,4 +43,3 @@ except ImportError:
     QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
     DB_PATH = PROJECT_ROOT / "db" / "syro.db"
     DATA_DIR = PROJECT_ROOT / "storage"
-

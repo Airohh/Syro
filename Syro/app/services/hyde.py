@@ -37,7 +37,9 @@ def generate_hypothetical_passage(
     history_block = ""
     if history:
         recent = list(history)[-3:]
-        history_block = "Contexte récent:\n" + "\n".join(f"- {h}" for h in recent) + "\n\n"
+        history_block = (
+            "Contexte récent:\n" + "\n".join(f"- {h}" for h in recent) + "\n\n"
+        )
 
     system = (
         "Tu rédiges un court extrait de document technique (3–6 phrases) qui "
@@ -50,7 +52,11 @@ def generate_hypothetical_passage(
         response = provider._chat_model.invoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
         )
-        text = response.content if isinstance(response.content, str) else str(response.content)
+        text = (
+            response.content
+            if isinstance(response.content, str)
+            else str(response.content)
+        )
         provider._chat_breaker.record_success()
         return text.strip()
     except Exception as exc:

@@ -6,21 +6,20 @@ Gère les niveaux d'accès (confidentialité) et de qualité des documents.
 import sqlite3
 from ..db import db_session
 
+
 def get_user_permissions(
-    user_id: int,
-    organization_id: int,
-    db: sqlite3.Connection | None = None
+    user_id: int, organization_id: int, db: sqlite3.Connection | None = None
 ) -> dict | None:
     """
     Récupère les permissions d'un utilisateur dans une organisation.
-    
+
     Returns:
         Dict avec les permissions ou None si pas de permissions spécifiques
     """
     if db is None:
         with db_session() as db:
             return get_user_permissions(user_id, organization_id, db)
-    
+
     row = db.execute(
         """
         SELECT 
@@ -34,23 +33,23 @@ def get_user_permissions(
         FROM user_permissions
         WHERE user_id = ? AND organization_id = ?
         """,
-        (user_id, organization_id)
+        (user_id, organization_id),
     ).fetchone()
-    
+
     if row:
         return dict(row)
-    
+
     # Permissions par défaut basées sur le rôle
     user = db.execute(
         "SELECT role FROM users WHERE id = ? AND organization_id = ?",
-        (user_id, organization_id)
+        (user_id, organization_id),
     ).fetchone()
-    
+
     if not user:
         return None
-    
+
     role = user["role"]
-    
+
     # Permissions par défaut selon le rôle
     default_permissions = {
         "owner": {
@@ -81,18 +80,19 @@ def get_user_permissions(
             "can_export_data": False,
         },
     }
-    
+
     return default_permissions.get(role, default_permissions["member"])
+
 
 def can_user_access_document(
     user_id: int,
     organization_id: int,
     document_id: int,
-    db: sqlite3.Connection | None = None
+    db: sqlite3.Connection | None = None,
 ) -> bool:
     """
     Vérifie si un utilisateur peut accéder à un document spécifique.
-    
+
     Prend en compte:
     - Les permissions de l'utilisateur (niveau d'accès max)
     - Le niveau d'accès du document
@@ -102,7 +102,7 @@ def can_user_access_document(
     if db is None:
         with db_session() as db:
             return can_user_access_document(user_id, organization_id, document_id, db)
-    
+
     # Récupérer le document
     doc = db.execute(
         """
@@ -114,20 +114,20 @@ def can_user_access_document(
         FROM documents
         WHERE id = ?
         """,
-        (document_id,)
+        (document_id,),
     ).fetchone()
-    
+
     if not doc:
         return False
-    
+
     # Vérifier que le document appartient à l'organisation
     if doc["organization_id"] != organization_id:
         return False
-    
+
     # Si l'utilisateur est le créateur, il a toujours accès
     if doc["created_by_user_id"] == user_id:
         return True
-    
+
     # Vérifier les partages directs
     share = db.execute(
         """
@@ -135,49 +135,52 @@ def can_user_access_document(
         WHERE document_id = ? AND shared_with_user_id = ?
         AND (expires_at IS NULL OR expires_at > datetime('now'))
         """,
-        (document_id, user_id)
+        (document_id, user_id),
     ).fetchone()
-    
+
     if share:
         return True
-    
+
     # Récupérer les permissions de l'utilisateur
     permissions = get_user_permissions(user_id, organization_id, db)
     if not permissions:
         return False
-    
+
     # Vérifier le niveau d'accès
     doc_access_level = doc["access_level_id"] or 1
     user_max_access = permissions.get("max_access_level_id", 1)
-    
+
     if doc_access_level > user_max_access:
         return False
-    
+
     # Vérifier le niveau de qualité
     doc_quality_level = doc["quality_level_id"] or 1
     user_min_quality = permissions.get("min_quality_level_id", 1)
-    
+
     if doc_quality_level < user_min_quality:
         return False
-    
+
     return True
+
 
 def filter_documents_by_permissions(
     user_id: int,
     organization_id: int,
     documents: list[dict],
-    db: sqlite3.Connection | None = None
+    db: sqlite3.Connection | None = None,
 ) -> list[dict]:
     """
     Filtre une liste de documents selon les permissions de l'utilisateur.
-    
+
     Returns:
         Liste filtrée des documents accessibles
     """
     if db is None:
         with db_session() as db:
-            return filter_documents_by_permissions(user_id, organization_id, documents, db)
-    
+            return filter_documents_by_permissions(
+                user_id, organization_id, documents, db
+            )
+
     if not documents:
         return []
 
@@ -228,29 +231,32 @@ def filter_documents_by_permissions(
 
     return filtered
 
-def get_access_level_name(access_level_id: int, db: sqlite3.Connection | None = None) -> str:
+
+def get_access_level_name(
+    access_level_id: int, db: sqlite3.Connection | None = None
+) -> str:
     """Récupère le nom d'un niveau d'accès."""
     if db is None:
         with db_session() as db:
             return get_access_level_name(access_level_id, db)
-    
+
     row = db.execute(
-        "SELECT name FROM document_access_levels WHERE id = ?",
-        (access_level_id,)
+        "SELECT name FROM document_access_levels WHERE id = ?", (access_level_id,)
     ).fetchone()
-    
+
     return row["name"] if row else "unknown"
 
-def get_quality_level_name(quality_level_id: int, db: sqlite3.Connection | None = None) -> str:
+
+def get_quality_level_name(
+    quality_level_id: int, db: sqlite3.Connection | None = None
+) -> str:
     """Récupère le nom d'un niveau de qualité."""
     if db is None:
         with db_session() as db:
             return get_quality_level_name(quality_level_id, db)
-    
-    row = db.execute(
-        "SELECT name FROM document_quality_levels WHERE id = ?",
-        (quality_level_id,)
-    ).fetchone()
-    
-    return row["name"] if row else "unknown"
 
+    row = db.execute(
+        "SELECT name FROM document_quality_levels WHERE id = ?", (quality_level_id,)
+    ).fetchone()
+
+    return row["name"] if row else "unknown"

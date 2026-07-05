@@ -14,38 +14,40 @@ from ..services.permissions_service import filter_documents_by_permissions
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
+
 @router.get("/stats", response_model=ProfileStats)
 def get_profile_stats(
-    user = Depends(get_current_user),
-    org = Depends(get_current_org),
+    user=Depends(get_current_user),
+    org=Depends(get_current_org),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
     Obtenir les statistiques complètes du profil utilisateur/organisation.
-    
+
     Returns:
         Statistiques complètes (documents, stockage, utilisation)
     """
     stats = get_user_stats(user["id"], org["id"])
     return ProfileStats(**stats)
 
+
 @router.get("/documents")
 def get_profile_documents(
     limit: int = 50,
     offset: int = 0,
     domain: str | None = None,
-    user = Depends(get_current_user),
-    org = Depends(get_current_org),
+    user=Depends(get_current_user),
+    org=Depends(get_current_org),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
     Obtenir la liste des documents de l'organisation (filtrés par permissions).
-    
+
     Args:
         limit: Nombre maximum de documents à retourner
         offset: Offset pour la pagination
         domain: Filtrer par domaine (optionnel)
-    
+
     Returns:
         Liste des documents avec leurs métadonnées (filtrés selon les permissions)
     """
@@ -63,17 +65,22 @@ def get_profile_documents(
         }
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
-        logger.error(f"Erreur lors de la récupération des documents: {e}", exc_info=True)
+        logger.error(
+            f"Erreur lors de la récupération des documents: {e}", exc_info=True
+        )
         from fastapi import HTTPException, status
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des documents: {str(e)}"
+            detail=f"Erreur lors de la récupération des documents: {str(e)}",
         )
+
 
 @router.get("/me")
 def get_my_profile(
-    user = Depends(get_current_user),
+    user=Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Obtenir le profil de l'utilisateur connecté."""
@@ -86,25 +93,29 @@ def get_my_profile(
         FROM users
         WHERE id = ?
         """,
-        (user["id"],)
+        (user["id"],),
     ).fetchone()
-    
+
     if not user_row:
         from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
     return dict(user_row)
+
 
 @router.put("/me", response_model=dict)
 def update_my_profile(
     payload: UserProfileUpdate,
-    user = Depends(get_current_user),
+    user=Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Mettre à jour le profil de l'utilisateur connecté."""
     updates = []
     params = []
-    
+
     if payload.first_name is not None:
         updates.append("first_name = ?")
         params.append(payload.first_name)
@@ -122,22 +133,22 @@ def update_my_profile(
         params.append(payload.phone)
     if payload.preferences is not None:
         import json
+
         updates.append("preferences = ?")
         params.append(json.dumps(payload.preferences))
-    
+
     if not updates:
         from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
-    
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update"
+        )
+
     updates.append("updated_at = CURRENT_TIMESTAMP")
     params.append(user["id"])
-    
-    db.execute(
-        f"UPDATE users SET {', '.join(updates)} WHERE id = ?",
-        params
-    )
+
+    db.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
-    
+
     # Retourner le profil mis à jour
     return get_my_profile(user, db)
-

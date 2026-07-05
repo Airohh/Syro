@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=4)
 atexit.register(_executor.shutdown, wait=False)
 
+
 def _vector_search_sync(
     query_vector: np.ndarray,
     organization_id: int,
@@ -43,6 +44,7 @@ def _vector_search_sync(
     except VectorStoreError:
         return []
 
+
 def _bm25_search_sync(
     organization_id: int,
     query: str,
@@ -59,6 +61,7 @@ def _bm25_search_sync(
         allowed_document_ids=allowed_document_ids,
         domain=domain,
     )
+
 
 def _build_query_vectors(
     queries: list[str],
@@ -172,7 +175,7 @@ def hybrid_search(
             vector_result_lists.append(results)
         else:
             bm25_result_lists.append(results)
-    
+
     # Reciprocal Rank Fusion (RRF) : score = somme sur chaque liste de
     # 1 / (k + rang). Les listes vector_results et bm25_results sont déjà
     # triées par score décroissant -> le rang = l'index. RRF n'utilise que
@@ -218,7 +221,7 @@ def hybrid_search(
     ]
 
     final_results.sort(key=lambda x: x["score"], reverse=True)
-    
+
     if settings.enable_reranking and len(final_results) > 1:
         try:
             reranked = reranker.rerank(
@@ -234,6 +237,5 @@ def hybrid_search(
             final_results = final_results[:top_k]
     else:
         final_results = final_results[:top_k]
-    
-    return final_results
 
+    return final_results

@@ -86,9 +86,13 @@ def _merge_chunk_lists(
     for chunk in primary + secondary:
         cid = str(chunk["chunk_id"])
         existing = by_id.get(cid)
-        if existing is None or float(chunk.get("score", 0)) > float(existing.get("score", 0)):
+        if existing is None or float(chunk.get("score", 0)) > float(
+            existing.get("score", 0)
+        ):
             by_id[cid] = chunk
-    merged = sorted(by_id.values(), key=lambda c: float(c.get("score", 0)), reverse=True)
+    merged = sorted(
+        by_id.values(), key=lambda c: float(c.get("score", 0)), reverse=True
+    )
     return merged[:top_k]
 
 

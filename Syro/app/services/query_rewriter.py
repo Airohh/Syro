@@ -42,7 +42,9 @@ def _llm_rewrite_variants(query: str, history: Sequence[str] | None) -> list[str
     history_lines = ""
     if history:
         recent = list(history)[-3:]
-        history_lines = "Contexte récent:\n" + "\n".join(f"- {h}" for h in recent) + "\n\n"
+        history_lines = (
+            "Contexte récent:\n" + "\n".join(f"- {h}" for h in recent) + "\n\n"
+        )
 
     system = (
         "Tu aides une recherche documentaire. Propose 1 à 2 reformulations courtes "
@@ -55,7 +57,11 @@ def _llm_rewrite_variants(query: str, history: Sequence[str] | None) -> list[str
         response = provider._chat_model.invoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
         )
-        text = response.content if isinstance(response.content, str) else str(response.content)
+        text = (
+            response.content
+            if isinstance(response.content, str)
+            else str(response.content)
+        )
         provider._chat_breaker.record_success()
         return _parse_rewrite_lines(text)
     except Exception as exc:
@@ -64,7 +70,9 @@ def _llm_rewrite_variants(query: str, history: Sequence[str] | None) -> list[str
         return []
 
 
-def rewrite(query: str, history: Sequence[str] | None = None, *, force: bool = False) -> list[str]:
+def rewrite(
+    query: str, history: Sequence[str] | None = None, *, force: bool = False
+) -> list[str]:
     """
     Retourne la question originale + variantes pour le retrieval.
 
