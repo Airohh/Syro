@@ -131,6 +131,8 @@ Couches optionnelles, désactivées par défaut (activables dans `.env`) : refor
 
 Détails : [docs/architecture.md](docs/architecture.md).
 
+**Graphe de connaissances du code** (généré par [graphify](https://github.com/safishamsi/graphify)) : [`graphify-out/GRAPH_REPORT.md`](graphify-out/GRAPH_REPORT.md) pour les modules centraux et les 78 communautés, et `graphify-out/graph.html` pour la vue interactive (à ouvrir dans un navigateur, sans serveur).
+
 ---
 
 ## Choix techniques

@@ -3,6 +3,13 @@
 > Description de ce que fait **réellement** le code (pas un backlog).
 > Historique : [`CHANGEMENTS/CHANGEMENTS.md`](../CHANGEMENTS/CHANGEMENTS.md) · Décisions : `CHANGEMENTS/ADR-*.md`
 
+## Graphe du code
+
+`graphify-out/` contient le graphe de connaissances du dépôt : 1 434 nœuds, 3 081 relations, 78 communautés nommées. Il est construit à partir de l'AST du code et de la documentation.
+- [`GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md) : modules centraux (*god nodes*), communautés, connexions inattendues.
+- `graph.html` : exploration interactive, à ouvrir dans un navigateur.
+- Mise à jour après des changements : `graphify update .` (code seul, sans LLM).
+
 ## Vue d'ensemble
 
 ```mermaid
