@@ -1,0 +1,36 @@
+# Artefacts non-source : exclus du graphe de connaissances (graphify)
+
+# Sortie de graphify elle-même
+graphify-out/
+.graphify_detect.json
+.graphify_python
+
+# Frontend : dépendances et build
+**/node_modules/
+**/dist/
+**/build/
+
+# Corpus de démo / d'évaluation : contenu métier, pas l'architecture
+Syro/evaluation/corpus/
+
+# Caches, environnements, données d'exécution
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+htmlcov/
+.coverage
+coverage.xml
+Syro/storage/
+*.sqlite
+*.db
+mlruns/
+*.log
+.DS_Store
+
+# Images décoratives (logo, favicon) : rien d architectural
+Syro/assets/
+**/public/
