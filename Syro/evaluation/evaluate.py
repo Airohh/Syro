@@ -28,6 +28,7 @@ from pathlib import Path
 EVAL_DIR = Path(__file__).resolve().parent
 SYRO_ROOT = EVAL_DIR.parent
 sys.path.insert(0, str(SYRO_ROOT))
+sys.path.insert(0, str(EVAL_DIR))  # « import metrics » (module voisin)
 
 # ---------------------------------------------------------------------------
 # Pipeline imports
@@ -35,7 +36,6 @@ sys.path.insert(0, str(SYRO_ROOT))
 from app.services.rag import retrieve_chunks_with_metadata
 from app.services.llm import answer_from_context
 from app.config import settings
-from app.db import db_session
 
 import metrics as retrieval_metrics
 
@@ -45,55 +45,52 @@ import metrics as retrieval_metrics
 DATASET_PATH = EVAL_DIR / "eval_dataset.json"
 RESULTS_PATH = EVAL_DIR / "results.json"
 ORGANIZATION_ID = 1  # default org created by init_db.py
+# Par défaut, on évalue l'expérience réelle : recherche dans TOUS les documents
+# (pas de filtre de domaine). --domain-filter restreint au domaine de la question.
+USE_DOMAIN_FILTER = False
 
 
 # ---------------------------------------------------------------------------
 # Pipeline runner
 # ---------------------------------------------------------------------------
-def _load_doc_filenames() -> dict[str, str]:
-    """document_id (str) -> filename, pour relier les chunks récupérés aux
-    `relevant_doc_ids` du golden set (qui sont des noms de fichiers)."""
-    with db_session() as conn:
-        rows = conn.execute("SELECT id, filename FROM documents").fetchall()
-    return {str(r["id"]): r["filename"] for r in rows}
+def _retrieved_doc_ids(results: list[dict]) -> list[str]:
+    """Noms de fichiers des documents récupérés (ordre conservé, dédupliqués).
 
-
-def _retrieved_doc_ids(results: list[dict], id_to_name: dict[str, str]) -> list[str]:
-    """Noms de fichiers des docs récupérés, ordre préservé, dédupliqués.
-    chunk_id = "{org}_{document_id}_{chunk}" (cf. rag.index_document_content)."""
+    Le golden set référence les documents par nom de fichier
+    (`relevant_doc_ids`) ; chaque chunk porte `metadata.filename`.
+    """
     seen: set[str] = set()
     ordered: list[str] = []
     for r in results:
-        parts = str(r.get("chunk_id", "")).split("_")
-        if len(parts) < 3:
-            continue
-        name = id_to_name.get(parts[1])
+        name = (r.get("metadata") or {}).get("filename")
         if name and name not in seen:
             seen.add(name)
             ordered.append(name)
     return ordered
 
 
-def run_pipeline(
-    question: str, domain: str | None = None, id_to_name: dict[str, str] | None = None
-) -> tuple[str, list[str], list[str]]:
-    """Call the Syro RAG pipeline and return (answer, contexts, retrieved_doc_ids)."""
-    results = retrieve_chunks_with_metadata(
+def _retrieve(question: str, domain: str | None) -> list[dict]:
+    return retrieve_chunks_with_metadata(
         organization_id=ORGANIZATION_ID,
         query=question,
-        domain=domain,
+        top_k=10,
+        domain=domain if USE_DOMAIN_FILTER else None,
     )
+
+
+def run_pipeline(question: str, domain: str | None = None) -> tuple[str, list[str], list[str]]:
+    """Pipeline complet : (réponse, contextes, documents récupérés)."""
+    results = _retrieve(question, domain)
     contexts = [r["text"] for r in results]
-    doc_ids = _retrieved_doc_ids(results, id_to_name or {})
-    if not contexts:
-        return "Aucun document indexé trouvé.", [], doc_ids
-    answer, _ = answer_from_context(question, contexts, domain=domain)
+    doc_ids = _retrieved_doc_ids(results)
+    if not results:
+        return "Je ne trouve pas cette information dans vos documents.", [], doc_ids
+    answer, _ = answer_from_context(question, results[: settings.rerank_top_k], domain=domain)
     return answer, contexts, doc_ids
 
 
 def run_retrieval_only(dataset_raw: list[dict]) -> dict:
     """Retrieval live sans LLM ni RAGAS — écrit report.json pour le gate T1.4."""
-    id_to_name = _load_doc_filenames()
     retrieval_items: list[dict] = []
     times: list[float] = []
 
@@ -103,14 +100,10 @@ def run_retrieval_only(dataset_raw: list[dict]) -> dict:
         print(f"[{i+1:02d}/{len(dataset_raw)}] {question[:70]}...")
 
         t0 = time.perf_counter()
-        results = retrieve_chunks_with_metadata(
-            organization_id=ORGANIZATION_ID,
-            query=question,
-            domain=domain,
-        )
+        results = _retrieve(question, domain)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         times.append(elapsed_ms)
-        retrieved_ids = _retrieved_doc_ids(results, id_to_name)
+        retrieved_ids = _retrieved_doc_ids(results)
         print(f"         → {len(results)} chunks, {elapsed_ms:.0f}ms")
 
         retrieval_items.append({
@@ -209,7 +202,14 @@ def main() -> dict:
         action="store_true",
         help="Mesure retrieval live uniquement (pas de LLM/RAGAS) → report.json",
     )
+    parser.add_argument(
+        "--domain-filter",
+        action="store_true",
+        help="Filtrer le retrieval sur le domaine annoté de chaque question",
+    )
     args = parser.parse_args()
+    global USE_DOMAIN_FILTER
+    USE_DOMAIN_FILTER = args.domain_filter
 
     with open(DATASET_PATH, encoding="utf-8") as f:
         dataset_raw = json.load(f)
@@ -239,8 +239,6 @@ def main() -> dict:
     samples = []
     pipeline_times = []
     retrieval_items = []  # pour les métriques de retrieval déterministes (T1.2)
-    id_to_name = _load_doc_filenames()
-
     for i, item in enumerate(dataset_raw):
         question: str = item["question"]
         ground_truth: str = item["ground_truth"]
@@ -249,7 +247,7 @@ def main() -> dict:
         print(f"[{i+1:02d}/{len(dataset_raw)}] {question[:70]}...")
 
         t0 = time.perf_counter()
-        answer, contexts, retrieved_ids = run_pipeline(question, domain=domain, id_to_name=id_to_name)
+        answer, contexts, retrieved_ids = run_pipeline(question, domain=domain)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         pipeline_times.append(elapsed_ms)
 

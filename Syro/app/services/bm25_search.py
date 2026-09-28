@@ -1,107 +1,97 @@
-"""BM25 lexical search service."""
+"""Recherche lexicale BM25 (index en mémoire par organisation)."""
 
 from __future__ import annotations
 
-import json
 import re
 import threading
+import unicodedata
 from typing import Any
 
 from rank_bm25 import BM25Okapi
 
 from ..db import db_session
+from .vector_store import domain_filter_value
+
+# Mots vides FR + EN : sans eux, « le », « de », « the » dominent les scores.
+_STOPWORDS = frozenset(
+    """
+    a au aux avec ce ces c cet cette d dans de des du elle en et eux il ils je j
+    l la le les leur lui ma mais me meme mes moi mon n ne nos notre nous on ou
+    par pas pour qu que qui s sa se ses son sur t ta te tes toi ton tu un une
+    vos votre vous y est sont etre avoir fait comme plus quel quelle quels
+    quelles quoi comment pourquoi dont entre
+    an and are as at be by for from how in is it of on or that the this to
+    what when where which who why with
+    """.split()
+)
+_TOKEN_RE = re.compile(r"\w+")
 
 
-def _domain_from_tags(tags: str | None) -> str:
-    if not tags:
-        return ""
-    tags = tags.strip()
-    if tags.startswith("["):
-        try:
-            parsed = json.loads(tags)
-            if isinstance(parsed, list) and parsed:
-                return str(parsed[0])
-        except json.JSONDecodeError:
-            pass
-    return tags.split(",")[0].strip()
+def tokenize(text: str) -> list[str]:
+    """Minuscules, sans accents, sans mots vides (« Évaluer » → « evaluer »)."""
+    folded = unicodedata.normalize("NFKD", text.lower())
+    folded = "".join(c for c in folded if not unicodedata.combining(c))
+    return [t for t in _TOKEN_RE.findall(folded) if t not in _STOPWORDS and len(t) > 1]
 
 
 class BM25Search:
     def __init__(self) -> None:
-        self._indexes: dict[int, tuple[BM25Okapi, list[dict[str, Any]]]] = {}
-        self._needs_rebuild: set[int] = set()
+        self._indexes: dict[int, tuple[BM25Okapi | None, list[dict[str, Any]]]] = {}
         self._fingerprints: dict[int, tuple[int, int]] = {}
         self._lock = threading.Lock()
 
-    def _content_fingerprint(self, organization_id: int) -> tuple[int, int]:
-        """Empreinte (count, max id) des chunks actifs de l'org.
+    @staticmethod
+    def content_fingerprint(organization_id: int) -> tuple[int, int]:
+        """(nombre, id max) des chunks actifs de l'org.
 
-        L'index BM25 vit en mémoire par processus : l'ingestion faite par le
-        worker Celery n'invalide pas l'index du processus API. Cette empreinte,
-        recalculée à chaque recherche (1 requête SQL indexée), détecte les
-        changements faits par un autre processus.
+        L'index vit en mémoire par processus : l'ingestion faite par le worker
+        Celery ne l'invalide pas directement. Cette empreinte (1 requête SQL)
+        détecte les changements faits par un autre processus.
         """
         with db_session() as conn:
             row = conn.execute(
                 """
-                SELECT COUNT(*) AS chunk_count, COALESCE(MAX(dc.id), 0) AS max_chunk_id
+                SELECT COUNT(*) AS n, COALESCE(MAX(dc.id), 0) AS max_id
                 FROM doc_chunks dc
                 JOIN documents d ON d.id = dc.document_id
                 WHERE d.organization_id = ? AND d.status = 'active'
                 """,
                 (organization_id,),
             ).fetchone()
-        return (row["chunk_count"], row["max_chunk_id"])
+        return (row["n"], row["max_id"])
 
-    def _tokenize(self, text: str) -> list[str]:
-        tokens = re.findall(r"\b\w+\b", text.lower())
-        return tokens
-
-    def _rebuild_index(self, organization_id: int) -> None:
+    @staticmethod
+    def _load_index(
+        organization_id: int,
+    ) -> tuple[BM25Okapi | None, list[dict[str, Any]]]:
         with db_session() as conn:
             rows = conn.execute(
                 """
-                SELECT 
-                    dc.id as chunk_id,
-                    dc.text,
-                    dc.document_id,
-                    d.source_type,
-                    d.tags,
-                    d.access_level_id,
-                    d.quality_level_id
+                SELECT dc.id AS chunk_id, dc.text, dc.chunk_index, dc.document_id,
+                       d.filename, d.domain, d.source_type
                 FROM doc_chunks dc
                 JOIN documents d ON d.id = dc.document_id
                 WHERE d.organization_id = ? AND d.status = 'active'
                 """,
                 (organization_id,),
             ).fetchall()
-
         if not rows:
-            self._indexes[organization_id] = (None, [])
-            self._needs_rebuild.discard(organization_id)
-            return
+            return None, []
+        chunks = [dict(row) for row in rows]
+        return BM25Okapi([tokenize(c["text"]) for c in chunks]), chunks
 
-        texts = [row["text"] for row in rows]
-        tokenized_texts = [self._tokenize(text) for text in texts]
-
-        bm25 = BM25Okapi(tokenized_texts)
-
-        chunk_data = [
-            {
-                "chunk_id": row["chunk_id"],
-                "text": row["text"],
-                "document_id": row["document_id"],
-                "source_type": row["source_type"],
-                "tags": row["tags"],
-                "domain": _domain_from_tags(row["tags"]),
-                "access_level_id": row["access_level_id"],
-                "quality_level_id": row["quality_level_id"],
-            }
-            for row in rows
-        ]
-
-        self._indexes[organization_id] = (bm25, chunk_data)
-        self._needs_rebuild.discard(organization_id)
+    def _get_index(
+        self, organization_id: int
+    ) -> tuple[BM25Okapi | None, list[dict[str, Any]]]:
+        with self._lock:
+            fingerprint = self.content_fingerprint(organization_id)
+            if (
+                organization_id not in self._indexes
+                or self._fingerprints.get(organization_id) != fingerprint
+            ):
+                self._indexes[organization_id] = self._load_index(organization_id)
+                self._fingerprints[organization_id] = fingerprint
+            return self._indexes[organization_id]
 
     def search(
         self,
@@ -114,73 +104,57 @@ class BM25Search:
     ) -> list[dict[str, Any]]:
         if allowed_document_ids is not None and not allowed_document_ids:
             return []
+        query_tokens = tokenize(query)
+        if not query_tokens:
+            return []
 
-        with self._lock:
-            fingerprint = self._content_fingerprint(organization_id)
+        # Scoring hors verrou : l'index (bm25, chunks) est immuable une fois construit.
+        bm25, chunks = self._get_index(organization_id)
+        if bm25 is None:
+            return []
+
+        domain_value = domain_filter_value(domain)
+        scores = bm25.get_scores(query_tokens)
+        results: list[dict[str, Any]] = []
+        for i, chunk in enumerate(chunks):
+            # Aucun terme commun avec la question : ne doit pas polluer la fusion
+            # RRF. (On teste la présence des termes plutôt que score > 0 : sur un
+            # très petit corpus, l'IDF de BM25Okapi peut être négatif.)
+            doc_terms = bm25.doc_freqs[i]
+            if not any(t in doc_terms for t in query_tokens):
+                continue
             if (
-                organization_id not in self._indexes
-                or organization_id in self._needs_rebuild
-                or self._fingerprints.get(organization_id) != fingerprint
+                allowed_document_ids is not None
+                and chunk["document_id"] not in allowed_document_ids
             ):
-                self._rebuild_index(organization_id)
-                self._fingerprints[organization_id] = fingerprint
+                continue
+            if domain_value and chunk["domain"] != domain_value:
+                continue
+            metadata = {
+                "document_id": chunk["document_id"],
+                "filename": chunk["filename"],
+                "domain": chunk["domain"] or "general",
+                "source_type": chunk["source_type"] or "",
+                "chunk_index": chunk["chunk_index"],
+            }
+            if filters and any(metadata.get(k) != v for k, v in filters.items()):
+                continue
+            results.append(
+                {
+                    "chunk_id": chunk["chunk_id"],
+                    "text": chunk["text"],
+                    "score": float(scores[i]),
+                    "metadata": metadata,
+                }
+            )
 
-            bm25, chunk_data = self._indexes[organization_id]
-
-            if not chunk_data or bm25 is None:
-                return []
-
-            eligible: list[int] = []
-            for i, chunk in enumerate(chunk_data):
-                doc_id = chunk["document_id"]
-                if (
-                    allowed_document_ids is not None
-                    and doc_id not in allowed_document_ids
-                ):
-                    continue
-                if domain and chunk.get("domain") and chunk["domain"] != domain:
-                    continue
-                if filters:
-                    meta = {
-                        "document_id": doc_id,
-                        "source_type": chunk.get("source_type") or "",
-                        "tags": chunk.get("tags") or "",
-                        "domain": chunk.get("domain") or "",
-                    }
-                    if any(meta.get(key) != value for key, value in filters.items()):
-                        continue
-                eligible.append(i)
-
-            if not eligible:
-                return []
-
-            tokenized_query = self._tokenize(query)
-            scores = bm25.get_scores(tokenized_query)
-            results: list[dict[str, Any]] = []
-            for i in eligible:
-                results.append(
-                    {
-                        "chunk_id": chunk_data[i]["chunk_id"],
-                        "text": chunk_data[i]["text"],
-                        "score": float(scores[i]),
-                        "metadata": {
-                            "document_id": chunk_data[i]["document_id"],
-                            "source_type": chunk_data[i]["source_type"] or "",
-                            "tags": chunk_data[i]["tags"] or "",
-                            "domain": chunk_data[i].get("domain") or "",
-                        },
-                    }
-                )
-
-            results.sort(key=lambda x: x["score"], reverse=True)
-            return results[:top_k]
+        results.sort(key=lambda r: r["score"], reverse=True)
+        return results[:top_k]
 
     def mark_for_rebuild(self, organization_id: int) -> None:
         with self._lock:
-            self._needs_rebuild.add(organization_id)
+            self._indexes.pop(organization_id, None)
             self._fingerprints.pop(organization_id, None)
-            if organization_id in self._indexes:
-                del self._indexes[organization_id]
 
 
 bm25_search = BM25Search()

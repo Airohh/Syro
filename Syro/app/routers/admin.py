@@ -1,57 +1,59 @@
-﻿from fastapi import APIRouter, Depends, HTTPException
+"""Administration de SON organisation (jamais d'une autre).
+
+Chaque endpoint est borné à l'organisation de l'appelant : un owner/admin
+ne peut ni lister, ni créditer, ni créer des comptes ailleurs.
+"""
+
 import sqlite3
 
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..auth import hash_password
 from ..dependencies import get_db, require_role
-from ..schemas import (
-    Organization,
-    OrganizationCreate,
-    OrganizationCreditUpdate,
-    User,
-    UserCreate,
-)
-from ..security import hash_password
+from ..schemas import Organization, OrganizationCreditUpdate, User, UserCreate
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-
-@router.get("/organizations", response_model=list[Organization])
-def list_organizations(
-    db: sqlite3.Connection = Depends(get_db), user=Depends(require_role("owner"))
-):
-    rows = db.execute("SELECT * FROM organizations").fetchall()
-    return [Organization(**dict(row)) for row in rows]
+# Rôles qu'un rôle donné a le droit d'attribuer (pas d'escalade de privilèges).
+_ASSIGNABLE_ROLES = {"owner": {"admin", "member"}, "admin": {"member"}}
 
 
-@router.post("/organizations", response_model=Organization)
-def create_organization(
-    payload: OrganizationCreate,
+@router.get("/organization", response_model=Organization)
+def get_my_organization(
     db: sqlite3.Connection = Depends(get_db),
-    user=Depends(require_role("owner")),
+    user=Depends(require_role("owner", "admin")),
 ):
-    cur = db.execute(
-        "INSERT INTO organizations (name, credit_balance, max_members) VALUES (?, ?, ?)",
-        (payload.name, payload.credit_balance, payload.max_members),
-    )
-    org_id = cur.lastrowid
-    org = db.execute("SELECT * FROM organizations WHERE id = ?", (org_id,)).fetchone()
+    org = db.execute(
+        "SELECT * FROM organizations WHERE id = ?", (user["organization_id"],)
+    ).fetchone()
     return Organization(**dict(org))
 
 
-@router.post("/organizations/{org_id}/credits", response_model=Organization)
+@router.post("/organization/credits", response_model=Organization)
 def adjust_credits(
-    org_id: int,
     payload: OrganizationCreditUpdate,
     db: sqlite3.Connection = Depends(get_db),
     user=Depends(require_role("owner")),
 ):
+    org_id = user["organization_id"]
     db.execute(
         "UPDATE organizations SET credit_balance = MAX(credit_balance + ?, 0) WHERE id = ?",
         (payload.amount, org_id),
     )
+    db.commit()
     org = db.execute("SELECT * FROM organizations WHERE id = ?", (org_id,)).fetchone()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
     return Organization(**dict(org))
+
+
+@router.get("/users", response_model=list[User])
+def list_users(
+    db: sqlite3.Connection = Depends(get_db),
+    user=Depends(require_role("owner", "admin")),
+):
+    rows = db.execute(
+        "SELECT * FROM users WHERE organization_id = ?", (user["organization_id"],)
+    ).fetchall()
+    return [User(**dict(row)) for row in rows]
 
 
 @router.post("/users", response_model=User)
@@ -60,44 +62,28 @@ def create_user(
     db: sqlite3.Connection = Depends(get_db),
     user=Depends(require_role("owner", "admin")),
 ):
-    org = db.execute(
-        "SELECT * FROM organizations WHERE id = ?", (payload.organization_id,)
-    ).fetchone()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-    member_count = db.execute(
-        "SELECT COUNT(*) FROM users WHERE organization_id = ?",
-        (payload.organization_id,),
-    ).fetchone()[0]
-    if member_count >= org["max_members"]:
+    if payload.role not in _ASSIGNABLE_ROLES[user["role"]]:
         raise HTTPException(
-            status_code=400, detail="Max members reached for this organization"
+            status_code=403,
+            detail=f"A {user['role']} cannot create a '{payload.role}' account",
         )
+    org_id = user["organization_id"]
+    org = db.execute(
+        "SELECT max_members FROM organizations WHERE id = ?", (org_id,)
+    ).fetchone()
+    members = db.execute(
+        "SELECT COUNT(*) FROM users WHERE organization_id = ?", (org_id,)
+    ).fetchone()[0]
+    if members >= org["max_members"]:
+        raise HTTPException(status_code=400, detail="Max members reached")
     try:
         cur = db.execute(
-            "INSERT INTO users (organization_id, email, password_hash, role) VALUES (?, ?, ?, ?)",
-            (
-                payload.organization_id,
-                payload.email,
-                hash_password(payload.password),
-                payload.role,
-            ),
+            "INSERT INTO users (organization_id, email, password_hash, role) "
+            "VALUES (?, ?, ?, ?)",
+            (org_id, payload.email, hash_password(payload.password), payload.role),
         )
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=400, detail="Email already exists") from exc
-    user_row = db.execute(
-        "SELECT * FROM users WHERE id = ?", (cur.lastrowid,)
-    ).fetchone()
-    return User(**dict(user_row))
-
-
-@router.get("/organizations/{org_id}/users", response_model=list[User])
-def list_users(
-    org_id: int,
-    db: sqlite3.Connection = Depends(get_db),
-    user=Depends(require_role("owner", "admin")),
-):
-    rows = db.execute(
-        "SELECT * FROM users WHERE organization_id = ?", (org_id,)
-    ).fetchall()
-    return [User(**dict(row)) for row in rows]
+    db.commit()
+    row = db.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return User(**dict(row))

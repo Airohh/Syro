@@ -6,9 +6,9 @@ from app.services.decompose import (
     _split_multi_question,
     _split_semicolon_clauses,
     decompose,
-    fuse_rrf_lists,
     retrieve_decomposed,
 )
+from app.services.hybrid_search import fuse_rrf
 
 
 def _chunk(cid: str, text: str, score: float) -> dict:
@@ -44,13 +44,11 @@ class TestDecompose:
 
 
 class TestFuseRrfLists:
-    @patch("app.services.decompose.settings")
-    def test_merges_unique_chunks(self, mock_settings):
-        mock_settings.rrf_k = 60
+    def test_merges_unique_chunks(self):
         list_a = [_chunk("1", "a", 0.9), _chunk("2", "b", 0.5)]
         list_b = [_chunk("2", "b", 0.8), _chunk("3", "c", 0.4)]
 
-        fused = fuse_rrf_lists([list_a, list_b], top_k=3)
+        fused = fuse_rrf([("vector", list_a), ("bm25", list_b)], rrf_k=60)
 
         assert len(fused) == 3
         assert fused[0]["chunk_id"] == "2"
@@ -76,12 +74,15 @@ class TestRetrieveDecomposed:
         mock_hybrid.assert_called_once()
 
     @patch("app.services.decompose._llm_decompose", return_value=[])
-    @patch("app.services.decompose.reranker")
+    @patch("app.services.hybrid_search.settings")
+    @patch("app.services.hybrid_search.reranker")
     @patch("app.services.decompose.hybrid_search")
     @patch("app.services.decompose.settings")
     def test_parallel_subqueries_fused(
-        self, mock_settings, mock_hybrid, mock_reranker, _mock_llm
+        self, mock_settings, mock_hybrid, mock_reranker, hs_settings, _mock_llm
     ):
+        hs_settings.rrf_k = 60
+        hs_settings.enable_reranking = False
         mock_settings.enable_query_decomposition = True
         mock_settings.enable_crag = False
         mock_settings.rerank_top_k = 5

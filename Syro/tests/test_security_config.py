@@ -1,30 +1,30 @@
-"""Garde-fous sécurité : secret de prod + CORS wildcard/credentials."""
-
-import pytest
+"""Garde-fous sécurité : secret JWT + CORS wildcard/credentials."""
 
 from app.config import Settings, _DEFAULT_SECRET_KEY
 from app.main import resolve_cors_settings
 
 
-class TestProductionSecrets:
-    def test_default_secret_rejected_in_prod(self):
-        s = Settings()
-        s.debug = False
-        s.secret_key = _DEFAULT_SECRET_KEY
-        with pytest.raises(RuntimeError):
-            s.validate_production_secrets()
+class TestSecretKey:
+    def test_generated_when_missing_and_persisted(self, tmp_path):
+        s = Settings(data_dir=tmp_path, secret_key=_DEFAULT_SECRET_KEY)
+        s.ensure_secret_key()
+        assert s.secret_key != _DEFAULT_SECRET_KEY
+        assert len(s.secret_key) >= 32
 
-    def test_custom_secret_ok_in_prod(self):
-        s = Settings()
-        s.debug = False
-        s.secret_key = "a-strong-random-secret"
-        s.validate_production_secrets()  # ne lève pas
+        # Un 2e process (autre worker uvicorn) relit le même secret.
+        other = Settings(data_dir=tmp_path, secret_key=_DEFAULT_SECRET_KEY)
+        other.ensure_secret_key()
+        assert other.secret_key == s.secret_key
+        assert (tmp_path / ".secret_key").stat().st_mode & 0o077 == 0
 
-    def test_default_secret_ok_in_debug(self):
-        s = Settings()
-        s.debug = True
-        s.secret_key = _DEFAULT_SECRET_KEY
-        s.validate_production_secrets()  # debug → toléré
+    def test_explicit_secret_kept(self, tmp_path):
+        s = Settings(data_dir=tmp_path, secret_key="a-strong-random-secret")
+        s.ensure_secret_key()
+        assert s.secret_key == "a-strong-random-secret"
+        assert not (tmp_path / ".secret_key").exists()
+
+    def test_debug_off_by_default(self):
+        assert Settings.model_fields["debug"].default is False
 
 
 class TestCorsSettings:

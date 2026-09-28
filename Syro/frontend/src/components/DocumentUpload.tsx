@@ -107,13 +107,13 @@ export default function DocumentUpload({ onUploadComplete, currentDomain = 'gene
           ou cliquez pour sélectionner
         </p>
         <p className="text-xs text-gray-400 mt-2">
-          PDF, DOCX, TXT (max 10MB)
+          PDF, DOCX, TXT, MD, CSV
         </p>
         <input
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".pdf,.docx,.txt,.md"
+          accept=".pdf,.docx,.txt,.md,.csv"
           onChange={(e) => handleFileSelect(e.target.files)}
           className="hidden"
         />

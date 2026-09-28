@@ -64,7 +64,7 @@ class TestSemanticCache:
         assert hit is None
 
     @patch("app.services.semantic_cache.settings")
-    def test_invalidate_domain_clears(self, mock_settings):
+    def test_invalidate_organization_clears(self, mock_settings):
         mock_settings.enable_semantic_cache = True
         mock_settings.semantic_cache_similarity_threshold = 0.9
         mock_settings.semantic_cache_ttl_seconds = 3600
@@ -73,11 +73,25 @@ class TestSemanticCache:
         cache = SemanticCache()
         vec = np.array([1.0, 0.0])
         cache.store_retrieval(1, "q", vec, [_chunk("1")], domain="tech")
-        cache.invalidate_domain(1, "tech")
+        cache.invalidate_organization(1)
 
         hit, status = cache.lookup_retrieval(1, "q", vec, domain="tech")
         assert hit is None
         assert status == "miss"
+
+    @patch("app.services.semantic_cache.settings")
+    def test_new_content_version_is_miss(self, mock_settings):
+        """Une ingestion faite par le worker (autre process) change la version."""
+        mock_settings.enable_semantic_cache = True
+        mock_settings.semantic_cache_similarity_threshold = 0.9
+        mock_settings.semantic_cache_ttl_seconds = 3600
+        mock_settings.semantic_cache_max_entries = 100
+
+        cache = SemanticCache()
+        vec = np.array([1.0, 0.0])
+        cache.store_retrieval(1, "q", vec, [_chunk("1")], version=(3, 10))
+        assert cache.lookup_retrieval(1, "q", vec, version=(3, 10))[1] == "hit"
+        assert cache.lookup_retrieval(1, "q", vec, version=(4, 11))[1] == "miss"
 
     @patch("app.services.semantic_cache.settings")
     def test_expired_entry_is_miss(self, mock_settings):

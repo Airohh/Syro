@@ -1,146 +1,112 @@
-"""Reranking service using bge-reranker-v2-m3 for improved precision."""
+"""Reranking cross-encoder (bge-reranker-v2-m3 par défaut, multilingue)."""
 
 from __future__ import annotations
 
 import logging
+import math
+import threading
 from typing import Any
 
 from ..config import settings
 
 logger = logging.getLogger(__name__)
 
-try:
-    import numpy as np
-except ImportError:
-    np = None
 
-
-def _normalize_unit(scores: list[float]) -> list[float]:
-    """Min-max vers [0,1] ; ex æquo (ou liste vide) → 1.0."""
-    if not scores:
-        return scores
-    lo, hi = min(scores), max(scores)
-    if hi == lo:
-        return [1.0] * len(scores)
-    return [(s - lo) / (hi - lo) for s in scores]
+def _sigmoid(x: float) -> float:
+    if x >= 0:
+        return 1.0 / (1.0 + math.exp(-x))
+    z = math.exp(x)
+    return z / (1.0 + z)
 
 
 class Reranker:
+    """Charge le modèle à la demande ; un échec de chargement est mémorisé
+    (sinon chaque requête retenterait un chargement de plusieurs Go)."""
+
     def __init__(self) -> None:
         self._model = None
-        self._enabled = settings.enable_reranking
-        self._cuda_available = None
+        self._load_failed = False
+        self._lock = threading.Lock()
 
-    def _check_cuda(self) -> bool:
-        if self._cuda_available is not None:
-            return self._cuda_available
-        try:
-            import torch
-
-            self._cuda_available = torch.cuda.is_available()
-            return self._cuda_available
-        except ImportError:
-            self._cuda_available = False
-            return False
+    @property
+    def available(self) -> bool:
+        return self._load_model() is not None
 
     def _load_model(self):
-        if self._model is not None:
+        if self._model is not None or self._load_failed:
             return self._model
-
-        if not self._enabled:
-            return None
-
-        try:
-            from FlagEmbedding import FlagReranker
-
-            try:
-                self._model = FlagReranker(
-                    "BAAI/bge-reranker-v2-m3",
-                    use_fp16=True,
-                    device="cuda" if self._check_cuda() else "cpu",
-                )
-                import logging as _logging
-
-                _logging.getLogger(__name__).info(
-                    "Reranker loaded on %s", "GPU" if self._check_cuda() else "CPU"
-                )
+        with self._lock:
+            if self._model is not None or self._load_failed:
                 return self._model
-            except Exception:
-                return None
-        except ImportError:
+            try:
+                from FlagEmbedding import FlagReranker
+
+                device = "cpu"
+                try:
+                    import torch
+
+                    if torch.cuda.is_available():
+                        device = "cuda"
+                except ImportError:
+                    pass
+                self._model = FlagReranker(
+                    settings.reranker_model,
+                    use_fp16=device == "cuda",
+                    device=device,
+                )
+                logger.info("Reranker %s loaded on %s", settings.reranker_model, device)
+            except Exception as exc:
+                self._load_failed = True
+                logger.warning(
+                    "Reranker unavailable (%s) — falling back to RRF order", exc
+                )
+        return self._model
+
+    def warmup(self) -> None:
+        """Pré-charge le modèle (appelé au démarrage dans un thread)."""
+        if settings.enable_reranking:
+            self._load_model()
+
+    def score(self, query: str, texts: list[str]) -> list[float] | None:
+        """Probabilités de pertinence [0, 1] (sigmoïde des logits), ou None."""
+        model = self._load_model()
+        if model is None or not texts:
             return None
-        except Exception:
+        try:
+            raw = model.compute_score([(query, t) for t in texts])
+        except Exception as exc:
+            logger.warning("Reranking failed, keeping RRF order: %s", exc)
             return None
+        # Un seul couple → scalaire (float ou numpy 0-d) ; sinon liste/ndarray.
+        values = (
+            [float(raw)]
+            if getattr(raw, "ndim", None) == 0 or isinstance(raw, (int, float))
+            else [float(s) for s in raw]
+        )
+        if len(values) != len(texts):
+            return None
+        return [_sigmoid(v) for v in values]
 
     def rerank(
         self,
         query: str,
         passages: list[dict[str, Any]],
-        top_k: int | None = None,
-    ) -> list[dict[str, Any]]:
+        top_k: int,
+    ) -> list[dict[str, Any]] | None:
+        """Trie par score cross-encoder et écarte les passages sous le seuil.
+
+        Retourne None si le reranker est indisponible (l'appelant garde
+        l'ordre RRF). Une liste vide signifie « rien de pertinent ».
         """
-        Rerank passages using cross-encoder model.
-
-        Args:
-            query: Search query
-            passages: List of passages with 'text' and other metadata
-            top_k: Number of top results to return
-
-        Returns:
-            Reranked list of passages with updated scores
-        """
-        if not passages:
-            return []
-
-        if not self._enabled:
-            # Return as-is if reranking disabled
-            return passages[:top_k] if top_k else passages
-
-        model = self._load_model()
-        if model is None:
-            # Fallback: return original order (model not available)
-            # This is expected if FlagEmbedding is not installed
-            return passages[:top_k] if top_k else passages
-
-        try:
-            # FlagReranker.compute_score : float pour une paire, liste/ndarray sinon.
-            pairs = [(query, p["text"]) for p in passages]
-            raw = model.compute_score(pairs)
-            # Scalaire (1 paire) : float Python, scalaire numpy (np.float32 n'est
-            # PAS sous-classe de float), ou ndarray 0-d → tous itérables-faux.
-            is_scalar = isinstance(raw, (int, float)) or (
-                np is not None
-                and (isinstance(raw, np.generic) or getattr(raw, "ndim", None) == 0)
-            )
-            if is_scalar:
-                rerank_scores = [float(raw)]
-            else:
-                rerank_scores = [float(s) for s in raw]
-
-            # Garde-fou : si le modèle ne renvoie pas un score par passage,
-            # on ne peut pas réordonner de façon fiable → ordre d'origine.
-            if len(rerank_scores) != len(passages):
-                return passages[:top_k] if top_k else passages
-
-            rerank_scores = _normalize_unit(rerank_scores)
-
-            w = settings.rerank_weight
-            reranked = [
-                {
-                    **passage,
-                    "rerank_score": rerank_scores[i],
-                    "final_score": passage.get("score", 0.0) * (1 - w)
-                    + rerank_scores[i] * w,
-                }
-                for i, passage in enumerate(passages)
-            ]
-            reranked.sort(key=lambda x: x["final_score"], reverse=True)
-            return reranked[:top_k] if top_k else reranked
-
-        except Exception as exc:
-            logger.warning("Reranking failed, returning original order: %s", exc)
-            return passages[:top_k] if top_k else passages
+        scores = self.score(query, [p["text"] for p in passages])
+        if scores is None:
+            return None
+        reranked = [
+            {**p, "rerank_score": s, "score": s} for p, s in zip(passages, scores)
+        ]
+        reranked.sort(key=lambda p: p["rerank_score"], reverse=True)
+        kept = [p for p in reranked if p["rerank_score"] >= settings.rerank_min_score]
+        return kept[:top_k]
 
 
-# Global instance
 reranker = Reranker()

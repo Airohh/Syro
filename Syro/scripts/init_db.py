@@ -1,118 +1,133 @@
-﻿import sqlite3
-from pathlib import Path
-import secrets
+"""Initialise (ou met à niveau) la base SQLite. Idempotent.
 
-from passlib.context import CryptContext
+Appelé automatiquement au démarrage de l'API. Utilisable seul :
+    python scripts/init_db.py
 
+Compte de démo créé au premier lancement (surchargeable par variables d'env) :
+    SYRO_ADMIN_EMAIL    (défaut : demo@syro.local)
+    SYRO_ADMIN_PASSWORD (défaut : syro-demo)
+"""
+
+from __future__ import annotations
+
+import json
 import os
+import secrets
+import sqlite3
+import sys
+from pathlib import Path
+
+import bcrypt
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = Path(os.environ.get("DB_PATH", str(ROOT / "db" / "syro.db")))
 SCHEMA_PATH = ROOT / "db" / "schema.sql"
 
 DEFAULT_ORG_NAME = "Syro Demo"
-DEFAULT_OWNER_EMAIL = "owner@example.com"
-DEFAULT_OWNER_PASSWORD = "ChangeMe123!"
+DEFAULT_ADMIN_EMAIL = "demo@syro.local"
+DEFAULT_ADMIN_PASSWORD = "syro-demo"
 
-# Initialize password context with error handling
-try:
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-except Exception:
-    # Fallback if bcrypt has issues
-    import hashlib
-    pwd_context = None
-
-def hash_password(password: str) -> str:
-    """Hash password using bcrypt. MUST use bcrypt for compatibility with backend."""
-    if pwd_context is None:
-        raise RuntimeError("bcrypt is required but not available. Install it with: pip install bcrypt")
-    
-    try:
-        # Ensure password is not too long for bcrypt (72 bytes max)
-        if len(password.encode('utf-8')) > 72:
-            password = password[:72]
-        return pwd_context.hash(password)
-    except Exception as e:
-        raise RuntimeError(f"Failed to hash password with bcrypt: {e}. Install bcrypt: pip install bcrypt")
-
-MIGRATION_PATH = ROOT / "db" / "migration_profiles_permissions.sql"
-
-
-def _apply_migration(conn: sqlite3.Connection, migration_path: Path) -> None:
-    """Apply migration SQL file.
-
-    Uses executescript() so that BEGIN...END trigger bodies are handled
-    correctly (simple semicolon-splitting breaks multi-statement triggers).
-    For upgrades on existing DBs, ALTER TABLE errors for duplicate columns
-    are caught and ignored.
-    """
-    sql = migration_path.read_text(encoding="utf-8")
-    try:
-        conn.executescript(sql)
-        print("Migration applied.")
-    except sqlite3.OperationalError as exc:
-        msg = str(exc).lower()
-        if "duplicate column" in msg or "already exists" in msg:
-            # DB already partially migrated — fall back to statement-by-statement
-            # for the non-trigger statements only, skipping duplicates.
-            _apply_migration_incremental(conn, sql)
-        else:
-            raise
+# Colonnes ajoutées au fil des versions : ajoutées aux anciennes bases.
+_UPGRADE_COLUMNS: dict[str, dict[str, str]] = {
+    "users": {
+        "first_name": "TEXT",
+        "last_name": "TEXT",
+        "avatar_url": "TEXT",
+        "bio": "TEXT",
+        "phone": "TEXT",
+        "preferences": "TEXT",
+        "last_login": "TEXT",
+        "updated_at": "TEXT",
+    },
+    "organizations": {
+        "org_type": "TEXT DEFAULT 'individual'",
+        "company_name": "TEXT",
+        "address": "TEXT",
+        "contact_email": "TEXT",
+        "settings": "TEXT",
+    },
+    "conversations": {"user_id": "INTEGER"},
+    "documents": {
+        "access_level_id": "INTEGER DEFAULT 1",
+        "quality_level_id": "INTEGER DEFAULT 1",
+        "created_by_user_id": "INTEGER",
+        "access_notes": "TEXT",
+        "domain": "TEXT",
+    },
+}
 
 
-def _apply_migration_incremental(conn: sqlite3.Connection, sql: str) -> None:
-    """Fallback: apply ALTER TABLE statements one by one, skipping duplicates.
-    Used when executescript() fails because some columns already exist (upgrade path).
-    """
-    applied = skipped = 0
-    # Extract only ALTER TABLE lines — safe to run one by one
-    for line in sql.splitlines():
-        stmt = line.strip().rstrip(";")
-        if not stmt or stmt.startswith("--"):
+def _db_path() -> Path:
+    return Path(os.environ.get("DB_PATH", str(ROOT / "db" / "syro.db")))
+
+
+def _upgrade_columns(conn: sqlite3.Connection) -> None:
+    for table, columns in _UPGRADE_COLUMNS.items():
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if not existing:
+            continue  # table absente : créée par schema.sql
+        for column, ddl in columns.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+
+def _backfill_domains(conn: sqlite3.Connection) -> None:
+    """Anciennes versions : domaine stocké en tag « domain:<x> »."""
+    rows = conn.execute(
+        "SELECT id, tags FROM documents WHERE domain IS NULL AND tags LIKE '%domain:%'"
+    ).fetchall()
+    for doc_id, tags in rows:
+        try:
+            for tag in json.loads(tags):
+                if isinstance(tag, str) and tag.startswith("domain:"):
+                    conn.execute(
+                        "UPDATE documents SET domain = ? WHERE id = ?",
+                        (tag.split(":", 1)[1], doc_id),
+                    )
+                    break
+        except (TypeError, ValueError):
             continue
-        if stmt.upper().startswith("ALTER TABLE"):
-            try:
-                conn.execute(stmt)
-                applied += 1
-            except sqlite3.OperationalError as exc:
-                if "duplicate column" in str(exc).lower():
-                    skipped += 1
-                else:
-                    raise
-    conn.commit()
-    print(f"Migration (incremental): {applied} statements, {skipped} already present.")
 
 
-def init_db() -> None:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        # Apply base schema (idempotent — uses CREATE TABLE IF NOT EXISTS)
-        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+def init_db(verbose: bool = True) -> None:
+    db_path = _db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
+        _upgrade_columns(conn)
+        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8-sig"))
+        _backfill_domains(conn)
 
-        # Apply migration for databases that existed before the schema was extended
-        if MIGRATION_PATH.exists():
-            _apply_migration(conn, MIGRATION_PATH)
-
-        cur = conn.execute("SELECT COUNT(*) FROM organizations")
-        if cur.fetchone()[0] == 0:
-            conn.execute(
+        if conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] == 0:
+            email = os.environ.get("SYRO_ADMIN_EMAIL", DEFAULT_ADMIN_EMAIL)
+            password = os.environ.get("SYRO_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
+            cur = conn.execute(
                 "INSERT INTO organizations (name, credit_balance, max_members) VALUES (?, ?, ?)",
-                (DEFAULT_ORG_NAME, 100000, 10),
+                (DEFAULT_ORG_NAME, 1_000_000, 10),
             )
-            org_id = conn.execute("SELECT id FROM organizations WHERE name = ?", (DEFAULT_ORG_NAME,)).fetchone()[0]
+            org_id = cur.lastrowid
+            password_hash = bcrypt.hashpw(
+                password.encode("utf-8")[:72], bcrypt.gensalt()
+            ).decode("utf-8")
             conn.execute(
-                "INSERT INTO users (organization_id, email, password_hash, role) VALUES (?, ?, ?, 'owner')",
-                (org_id, DEFAULT_OWNER_EMAIL, hash_password(DEFAULT_OWNER_PASSWORD)),
+                "INSERT INTO users (organization_id, email, password_hash, role) "
+                "VALUES (?, ?, ?, 'owner')",
+                (org_id, email, password_hash),
             )
             conn.execute(
                 "INSERT INTO api_keys (organization_id, name, secret) VALUES (?, ?, ?)",
                 (org_id, "default", secrets.token_hex(32)),
             )
-            conn.commit()
-            print("Seeded default organization and owner user.")
+            if verbose:
+                print(f"Created demo organization and owner account: {email}")
+                if "SYRO_ADMIN_PASSWORD" not in os.environ:
+                    print(
+                        "  Default password in use — set SYRO_ADMIN_PASSWORD "
+                        "before exposing Syro beyond your machine.",
+                        file=sys.stderr,
+                    )
+        conn.commit()
+    if verbose:
+        print(f"Database ready at {db_path}")
 
-    print(f"Database initialized at {DB_PATH}")
 
 if __name__ == "__main__":
     init_db()

@@ -1,40 +1,37 @@
-﻿from __future__ import annotations
+"""Ingestion de documents : enregistrement, extraction, classement, indexation.
+
+Le domaine d'un document est stocké dans `documents.domain` : c'est la seule
+source de vérité, lue par Qdrant (payload) comme par BM25.
+"""
+
+from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import sqlite3
+import time
 from pathlib import Path
 from typing import Sequence
 
-import sqlite3
-
-from fastapi import BackgroundTasks
-
 from ..db import db_session
+from ..domains import normalize_domain
+from .domain_detector import classify_text
 from .file_extractor import extract_text_from_bytes
-from .rag import index_document_content
+from .rag import index_document
+
+logger = logging.getLogger(__name__)
 
 
-def _serialize_tags(tags: Sequence[str] | None) -> str | None:
-    if not tags:
-        return None
-    return json.dumps(list(dict.fromkeys([tag.strip() for tag in tags if tag.strip()])))
+def checksum_bytes(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
 
 
-def parse_tags(raw: str | None) -> list[str] | None:
+def parse_tags(raw: str | Sequence[str] | None) -> list[str]:
     if not raw:
-        return None
-    return [tag.strip() for tag in raw.split(",") if tag.strip()]
-
-
-def compute_next_version(
-    db: sqlite3.Connection, organization_id: int, filename: str
-) -> int:
-    row = db.execute(
-        "SELECT MAX(version) FROM documents WHERE organization_id = ? AND filename = ?",
-        (organization_id, filename),
-    ).fetchone()
-    current = row[0] if row and row[0] else 0
-    return current + 1
+        return []
+    items = raw.split(",") if isinstance(raw, str) else raw
+    return list(dict.fromkeys(t.strip() for t in items if t and t.strip()))
 
 
 def create_document_entry(
@@ -47,23 +44,32 @@ def create_document_entry(
     checksum: str,
     tags: Sequence[str] | None,
     source_type: str,
+    domain: str | None = None,
     created_by_user_id: int | None = None,
-    access_level_id: int | None = 1,  # Par défaut: public
-    quality_level_id: int | None = 1,  # Par défaut: draft
+    access_level_id: int = 1,  # public
+    quality_level_id: int = 1,  # draft
 ) -> tuple[int, int]:
-    version = compute_next_version(db, organization_id, filename)
+    """Crée la ligne `documents` (statut queued). Retourne (id, version)."""
+    row = db.execute(
+        "SELECT MAX(version) FROM documents WHERE organization_id = ? AND filename = ?",
+        (organization_id, filename),
+    ).fetchone()
+    version = (row[0] or 0) + 1
+    tag_list = parse_tags(tags)
     cur = db.execute(
-        """INSERT INTO documents 
-        (organization_id, filename, storage_path, mime_type, checksum, tags, version, source_type, 
-         ingestion_status, created_by_user_id, access_level_id, quality_level_id, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, CURRENT_TIMESTAMP)""",
+        """INSERT INTO documents
+        (organization_id, filename, storage_path, mime_type, checksum, tags, domain,
+         version, source_type, ingestion_status, created_by_user_id,
+         access_level_id, quality_level_id, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, CURRENT_TIMESTAMP)""",
         (
             organization_id,
             filename,
             storage_path,
             mime_type,
             checksum,
-            _serialize_tags(tags),
+            json.dumps(tag_list) if tag_list else None,
+            normalize_domain(domain),
             version,
             source_type,
             created_by_user_id,
@@ -74,120 +80,90 @@ def create_document_entry(
     return cur.lastrowid, version
 
 
-def queue_ingestion(
-    background_tasks: BackgroundTasks,
-    document_id: int,
-    organization_id: int,
-    storage_path: str,
-    mime_type: str | None,
-    domain: str | None = None,
-) -> None:
-    background_tasks.add_task(
-        process_document, document_id, organization_id, storage_path, mime_type, domain
-    )
+def _set_status(document_id: int, status: str, **fields) -> None:
+    sets = ["ingestion_status = ?", "updated_at = CURRENT_TIMESTAMP"]
+    values: list = [status]
+    for key, value in fields.items():
+        sets.append(f"{key} = ?")
+        values.append(value)
+    with db_session() as conn:
+        conn.execute(
+            f"UPDATE documents SET {', '.join(sets)} WHERE id = ?",
+            (*values, document_id),
+        )
 
 
-_TYPE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
-    ("snowflake", ("snowflake", "snow")),
-    ("airflow", ("airflow", "dag")),
-    ("databricks", ("databricks", "spark")),
-    ("azure", ("azure", "synapse")),
-    ("terraform", ("terraform", "tf")),
-    ("sql", ("sql", "query")),
-]
+def run_ingestion(document_id: int) -> int:
+    """Extraction → domaine (fourni ou détecté) → indexation. Retourne le nb de chunks.
 
-
-def infer_metadata(
-    filename: str, tags: list[str], source_type: str, domain: str | None = None
-) -> dict:
-    """Construit les métadonnées d'un chunk (type/difficulté) à partir du nom de
-    fichier et des tags. Source unique partagée par le worker Celery et le
-    fallback BackgroundTasks (évite la divergence d'inférence)."""
-    metadata: dict = {"source_type": source_type, "tags": tags}
-    if domain:
-        metadata["domain"] = domain
-
-    filename_lower = filename.lower()
-    metadata["type"] = next(
-        (
-            label
-            for label, keywords in _TYPE_KEYWORDS
-            if any(k in filename_lower for k in keywords)
-        ),
-        "general",
-    )
-
-    lowered = {t.lower() for t in tags}
-    if lowered & {"beginner", "intro", "basics"}:
-        metadata["difficulty"] = "beginner"
-    elif lowered & {"advanced", "expert", "complex"}:
-        metadata["difficulty"] = "expert"
-    else:
-        metadata["difficulty"] = "intermediate"
-    return metadata
-
-
-def run_ingestion(
-    document_id: int,
-    organization_id: int,
-    storage_path: str,
-    mime_type: str | None,
-    domain: str | None = None,
-) -> int:
-    """Cœur d'ingestion partagé (extract → métadonnées → index Qdrant).
-
-    Lève en cas d'échec ; la gestion du statut/metrics/retry est laissée à
-    l'appelant (worker Celery vs BackgroundTasks). Retourne le nombre de chunks.
+    Lève en cas d'échec ; le statut est géré par `ingest_document`.
     """
-    path = Path(storage_path)
-    content_bytes = path.read_bytes()
-    text = extract_text_from_bytes(content_bytes, path.name, mime_type)
+    with db_session() as conn:
+        doc = conn.execute(
+            "SELECT organization_id, filename, storage_path, mime_type, domain "
+            "FROM documents WHERE id = ?",
+            (document_id,),
+        ).fetchone()
+    if not doc:
+        raise ValueError(f"Document {document_id} introuvable")
+
+    path = Path(doc["storage_path"])
+    text = extract_text_from_bytes(path.read_bytes(), doc["filename"], doc["mime_type"])
     if not text.strip():
         raise ValueError("Document vide après extraction")
 
-    with db_session() as conn:
-        doc_row = conn.execute(
-            "SELECT filename, source_type, tags FROM documents WHERE id = ?",
-            (document_id,),
-        ).fetchone()
-    if not doc_row:
-        raise ValueError(f"Document {document_id} non trouvé dans la DB")
+    domain = doc["domain"] or classify_text(text)["domain"]
+    if domain != doc["domain"]:
+        with db_session() as conn:
+            conn.execute(
+                "UPDATE documents SET domain = ? WHERE id = ?", (domain, document_id)
+            )
 
-    try:
-        tags = json.loads(doc_row["tags"]) if doc_row["tags"] else []
-    except (json.JSONDecodeError, TypeError):
-        tags = []
-    metadata = infer_metadata(
-        doc_row["filename"], tags, doc_row["source_type"] or "unknown", domain
+    return index_document(
+        document_id,
+        doc["organization_id"],
+        text,
+        domain=domain,
+        filename=doc["filename"],
     )
 
-    return index_document_content(document_id, organization_id, text, metadata=metadata)
 
-
-def process_document(
-    document_id: int,
-    organization_id: int,
-    storage_path: str,
-    mime_type: str | None,
-    domain: str | None = None,
-) -> None:
-    """Fallback BackgroundTasks : ingestion synchrone + maj statut DB."""
+def ingest_document(document_id: int) -> int:
+    """Ingestion avec suivi de statut (processing → complete | failed)."""
+    start = time.time()
+    _set_status(document_id, "processing", ingestion_error=None)
     try:
-        chunk_count = run_ingestion(
-            document_id, organization_id, storage_path, mime_type, domain
-        )
-        with db_session() as conn:
-            conn.execute(
-                "UPDATE documents SET ingestion_status = 'complete', chunk_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (chunk_count, document_id),
+        chunk_count = run_ingestion(document_id)
+    except Exception as exc:
+        _set_status(document_id, "failed", ingestion_error=str(exc)[:500])
+        raise
+    _set_status(document_id, "complete", chunk_count=chunk_count)
+
+    try:
+        from .mlops_tracker import get_mlops_tracker
+
+        tracker = get_mlops_tracker()
+        if tracker.enabled:
+            with db_session() as conn:
+                org_id = conn.execute(
+                    "SELECT organization_id FROM documents WHERE id = ?", (document_id,)
+                ).fetchone()[0]
+            tracker.log_document_ingestion(
+                document_id=document_id,
+                organization_id=org_id,
+                num_chunks=chunk_count,
+                ingestion_time_ms=(time.time() - start) * 1000,
+                document_size_chars=0,
+                metadata=None,
             )
-    except Exception as exc:  # pragma: no cover - background logging
-        with db_session() as conn:
-            conn.execute(
-                "UPDATE documents SET ingestion_status = 'failed', ingestion_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (str(exc), document_id),
-            )
+    except Exception as exc:  # le tracking ne doit jamais casser l'ingestion
+        logger.debug("MLflow ingestion tracking skipped: %s", exc)
+    return chunk_count
 
 
-def checksum_bytes(content: bytes) -> str:
-    return hashlib.sha256(content).hexdigest()
+def process_document(document_id: int) -> None:
+    """Variante BackgroundTasks (sans Celery) : l'erreur est déjà en base."""
+    try:
+        ingest_document(document_id)
+    except Exception as exc:
+        logger.error("Ingestion failed for document %s: %s", document_id, exc)

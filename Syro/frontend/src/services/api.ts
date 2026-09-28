@@ -56,8 +56,7 @@ function createApiInstance(domainId?: string): AxiosInstance {
       } else if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
         error.message = `Impossible de se connecter au backend ${domainName}.`;
         error.userMessage = `Le backend ${domainName} n'est pas démarré ou n'est pas accessible sur le port ${port}.`;
-        error.solution = `Vérifiez que le backend ${domainName} est lancé. Consultez les logs de démarrage (syro-startup.log dans le dossier frontend).`;
-        error.action = 'Relancer l\'application ou vérifier les fenêtres PowerShell des backends.';
+        error.solution = 'Vérifiez que l\'API tourne : docker compose ps (ou make logs).';
       } else if (error.response) {
         // Server responded with error status
         const status = error.response.status;
@@ -66,11 +65,11 @@ function createApiInstance(domainId?: string): AxiosInstance {
           if (error.response.data && error.response.data.detail) {
             error.message = `Authentification échouée: ${error.response.data.detail}`;
             error.userMessage = `Les identifiants sont incorrects ou l'utilisateur n'existe pas.`;
-            error.solution = `Vérifiez vos identifiants ou initialisez la base de données avec: python scripts/init_db.py`;
+            error.solution = `Compte de démo : demo@syro.local / syro-demo`;
           } else {
             error.message = `Authentification échouée (401 Unauthorized)`;
             error.userMessage = `Les identifiants sont incorrects ou l'utilisateur n'existe pas dans la base de données.`;
-            error.solution = `Initialisez la base de données avec: python scripts/init_db.py`;
+            error.solution = `Compte de démo : demo@syro.local / syro-demo`;
           }
           
           error.technicalMessage = error.message;
@@ -80,11 +79,15 @@ function createApiInstance(domainId?: string): AxiosInstance {
           error.message = 'Endpoint non trouvé.';
           error.userMessage = 'La fonctionnalité demandée n\'est pas disponible sur ce backend.';
           error.solution = 'Vérifiez que vous utilisez la bonne version du backend.';
+        } else if (status === 503) {
+          error.message = 'Service indisponible.';
+          error.userMessage = error.response.data?.detail || 'Un service (LLM ou Qdrant) est indisponible.';
+          error.solution = 'Vérifiez que tous les conteneurs tournent : docker compose ps';
         } else if (status >= 500) {
           error.message = 'Erreur serveur.';
           error.userMessage = 'Une erreur s\'est produite sur le serveur.';
           error.solution = 'Vérifiez les logs du backend pour plus de détails.';
-          error.action = 'Consultez les fenêtres PowerShell des backends ou les logs.';
+          error.action = 'Consultez les logs : docker compose logs syro-api';
         }
       }
       return Promise.reject(error);
@@ -123,13 +126,20 @@ export interface Message {
 export interface Source {
   text: string;
   score: number;
-  metadata?: Record<string, any>;
+  metadata?: {
+    source?: number;
+    filename?: string;
+    header?: string;
+    domain?: string;
+    rerank_score?: number | null;
+    [key: string]: any;
+  };
 }
 
 export interface ChatResponse {
   message: string;
   sources: Source[];
-  conversation_id: string;
+  conversation_id: number;
   usage: number;
 }
 
@@ -137,7 +147,6 @@ export interface Domain {
   id: string;
   name: string;
   description: string;
-  document_types: string[];
 }
 
 export const authService = {
@@ -158,22 +167,20 @@ export const authService = {
 };
 
 export const chatService = {
+  /**
+   * Envoie une question. `domainId` = 'general' → recherche dans tous les
+   * documents ; sinon le retrieval est filtré sur ce domaine.
+   * `conversationId` = id serveur de la conversation (null pour en créer une).
+   */
   sendMessage: async (
     content: string,
-    conversationId: string | null = null,
-    agentName?: string,
-    domainId?: string
+    conversationId: number | null = null,
+    domainId: string = 'general',
   ): Promise<ChatResponse> => {
-    const url = agentName 
-      ? `/agents/chat/${agentName}`
-      : '/chat/message';
-    
-    // Use domain-specific API instance if domainId is provided
-    const apiInstance = domainId ? getApiForDomain(domainId) : api;
-    
-    const response = await apiInstance.post<ChatResponse>(url, {
+    const response = await api.post<ChatResponse>('/chat/message', {
       content,
       conversation_id: conversationId,
+      domain: domainId === 'general' ? null : domainId,
     });
     return response.data;
   },
@@ -202,23 +209,14 @@ export const domainService = {
   },
 };
 
-export const agentService = {
-  list: async (): Promise<{ agents: Array<{ name: string; personality: string }> }> => {
-    const response = await api.get('/agents/list');
-    return response.data;
-  },
-};
-
 export const documentService = {
   uploadFile: async (file: File, tags?: string, domainId?: string): Promise<any> => {
     const formData = new FormData();
     formData.append('file', file);
-    if (tags) {
-      formData.append('tags', tags);
-    }
-    
-    const apiInstance = domainId ? getApiForDomain(domainId) : api;
-    const response = await apiInstance.post('/documents/files', formData);
+    if (tags) formData.append('tags', tags);
+    // Domaine choisi dans l'UI ; sinon le worker classe le document lui-même.
+    if (domainId && domainId !== 'general') formData.append('domain', domainId);
+    const response = await api.post('/documents/files', formData);
     return response.data;
   },
 

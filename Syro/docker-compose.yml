@@ -1,0 +1,155 @@
+# Syro — stack complète en une commande :
+#
+#   docker compose up -d --build
+#
+# Puis http://localhost:5173 (UI) — compte démo : demo@syro.local / syro-demo
+#      http://localhost:8000/docs (API)
+#
+# Le 1er démarrage télécharge les modèles Ollama (llama3.2 + nomic-embed-text,
+# ~2,3 Go) et le reranker (~2,2 Go) : compter quelques minutes.
+# Configuration optionnelle : copier .env.example en .env (ex. LLM_PROVIDER=openai).
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: infra/docker/backend.Dockerfile
+    args:
+      WITH_RERANKER: ${WITH_RERANKER:-true}
+  image: syro-backend
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DB_PATH: /app/data/syro.db
+    DATA_DIR: /app/data/storage
+    QDRANT_URL: http://qdrant:6333
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/0
+    OLLAMA_BASE_URL: http://ollama:11434/v1
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+  volumes:
+    - syro_data:/app/data
+  depends_on:
+    qdrant:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    ollama-init:
+      condition: service_completed_successfully
+  restart: unless-stopped
+
+services:
+  syro-api:
+    <<: *backend
+    container_name: syro-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - syro_data:/app/data
+      - hf_cache:/home/syro/.cache/huggingface  # modèle du reranker (persistant)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  syro-worker:
+    <<: *backend
+    container_name: syro-worker
+    command: ["python", "-m", "celery", "-A", "worker.main", "worker", "--loglevel=info", "--concurrency=2"]
+
+  syro-frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../infra/docker/frontend.Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    container_name: syro-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - syro-api
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: syro-qdrant
+    ports:
+      - "127.0.0.1:6333:6333"  # dashboard : http://localhost:6333/dashboard
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: syro-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # LLM local gratuit. Avec LLM_PROVIDER=openai il reste inactif.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: syro-ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # GPU NVIDIA : décommenter (nécessite nvidia-container-toolkit)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  # Télécharge les modèles une fois (idempotent), puis s'arrête.
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: syro-ollama-init
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ "$${LLM_PROVIDER:-ollama}" = "openai" ]; then echo "OpenAI mode: skipping model pull"; exit 0; fi
+        ollama pull "$${CHAT_MODEL:-llama3.2}" && ollama pull "$${EMBEDDINGS_MODEL:-nomic-embed-text}"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.0
+    container_name: syro-mlflow
+    ports:
+      - "127.0.0.1:5000:5000"
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow
+    volumes:
+      - mlflow_data:/mlflow
+    restart: unless-stopped
+
+volumes:
+  syro_data:
+  hf_cache:
+  qdrant_storage:
+  ollama_data:
+  mlflow_data:

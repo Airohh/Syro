@@ -1,5 +1,8 @@
-"""Client Celery pour enqueue des tâches depuis l'API."""
+"""Mise en file de l'ingestion : Celery (worker) si dispo, sinon BackgroundTasks."""
 
+from __future__ import annotations
+
+import logging
 from typing import TYPE_CHECKING, Optional
 
 from ..config import settings
@@ -8,139 +11,48 @@ if TYPE_CHECKING:
     from celery import Celery
     from fastapi import BackgroundTasks
 
+logger = logging.getLogger(__name__)
+
 _celery_app: "Celery | None" = None
 
 
 def get_celery_app() -> "Celery":
-    """Obtenir l'application Celery (singleton)."""
     global _celery_app
-
     if _celery_app is None:
-        try:
-            from celery import Celery
+        from celery import Celery
 
-            _celery_app = Celery("syro_api")
-            _celery_app.conf.update(
-                broker_url=settings.celery_broker_url,
-                result_backend=settings.celery_result_backend,
-                task_serializer="json",
-                result_serializer="json",
-                accept_content=["json"],
-                timezone="UTC",
-                enable_utc=True,
-            )
-        except ImportError:
-            raise ImportError(
-                "Celery n'est pas installé. Installez-le avec: pip install celery redis"
-            )
-
+        _celery_app = Celery("syro_api")
+        _celery_app.conf.update(
+            broker_url=settings.celery_broker_url,
+            result_backend=settings.celery_result_backend,
+            task_serializer="json",
+            result_serializer="json",
+            accept_content=["json"],
+            timezone="UTC",
+            enable_utc=True,
+            broker_connection_timeout=2,
+        )
     return _celery_app
 
 
 def enqueue_document_ingestion(
     document_id: int,
-    organization_id: int,
-    storage_path: str,
-    mime_type: str | None = None,
-    domain: str | None = None,
     background_tasks: Optional["BackgroundTasks"] = None,
 ) -> str:
-    """
-    Enqueue une tâche d'ingestion de document.
+    """Retourne l'id de tâche Celery, ou un marqueur si exécuté localement."""
+    from .ingestion import process_document
 
-    Args:
-        document_id: ID du document
-        organization_id: ID de l'organisation
-        storage_path: Chemin vers le fichier
-        mime_type: Type MIME
-        domain: Domaine forcé
-        background_tasks: BackgroundTasks de FastAPI (optionnel, pour fallback)
-
-    Returns:
-        str: Task ID Celery ou identifiant de tâche
-    """
-    # Si Celery est désactivé (mode dev), utiliser BackgroundTasks
-    if settings.celery_task_always_eager:
-        # Utiliser BackgroundTasks si disponible, sinon exécuter directement (non recommandé)
-        if background_tasks:
-            from ..services.ingestion import process_document
-
-            background_tasks.add_task(
-                process_document,
-                document_id,
-                organization_id,
-                storage_path,
-                mime_type,
-                domain,
+    if not settings.celery_task_always_eager:
+        try:
+            task = get_celery_app().send_task(
+                "process_document_upload", args=[document_id]
             )
-            return "background-task-execution"
-        else:
-            import logging
+            return task.id
+        except Exception as e:
+            logger.warning("Celery unavailable, ingesting in-process: %s", e)
 
-            logger = logging.getLogger(__name__)
-            logger.warning(
-                "Celery désactivé et BackgroundTasks non disponible, exécution synchrone"
-            )
-            from ..services.ingestion import process_document
-
-            try:
-                process_document(
-                    document_id, organization_id, storage_path, mime_type, domain
-                )
-                return "eager-execution"
-            except Exception as e:
-                logger.error(
-                    "Erreur traitement synchrone doc %s: %s",
-                    document_id,
-                    e,
-                    exc_info=True,
-                )
-                return "eager-execution-error"
-
-    # Sinon, essayer d'utiliser Celery
-    try:
-        celery_app = get_celery_app()
-        task = celery_app.send_task(
-            "process_document_upload",
-            args=[document_id, organization_id, storage_path, mime_type, domain],
-        )
-        return task.id
-    except Exception as e:
-        # Si Celery/Redis n'est pas disponible, utiliser BackgroundTasks comme fallback
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.warning(
-            f"Celery/Redis non disponible, basculement vers BackgroundTasks: {e}"
-        )
-
-        # Utiliser BackgroundTasks de FastAPI (non-bloquant)
-        if background_tasks:
-            from ..services.ingestion import process_document
-
-            background_tasks.add_task(
-                process_document,
-                document_id,
-                organization_id,
-                storage_path,
-                mime_type,
-                domain,
-            )
-            return "background-task-fallback"
-        else:
-            logger.error("BackgroundTasks non disponible, exécution synchrone")
-            try:
-                from ..services.ingestion import process_document
-
-                process_document(
-                    document_id, organization_id, storage_path, mime_type, domain
-                )
-                return "fallback-sync-execution"
-            except Exception as process_error:
-                logger.error(
-                    "Erreur traitement synchrone doc %s: %s",
-                    document_id,
-                    process_error,
-                    exc_info=True,
-                )
-                return "fallback-sync-execution-error"
+    if background_tasks is not None:
+        background_tasks.add_task(process_document, document_id)
+        return "background-task"
+    process_document(document_id)
+    return "sync"

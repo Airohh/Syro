@@ -2,7 +2,8 @@ import { useState, useCallback } from 'react';
 import { Message } from '../services/api';
 
 export interface Conversation {
-  id: string;
+  id: string;           // identifiant local (localStorage)
+  serverId?: number;    // conversation côté API (historique utilisé par le RAG)
   title: string;
   messages: Message[];
   createdAt: number;
@@ -40,13 +41,14 @@ export function useLocalConversations() {
     setConversations(readFromStorage().sort((a, b) => b.updatedAt - a.updatedAt));
   }, []);
 
-  const save = useCallback((messages: Message[]): string | null => {
+  const save = useCallback((messages: Message[], serverId?: number): string | null => {
     if (messages.length === 0) return null;
     const stored = readFromStorage();
     const firstUser = messages.find(m => m.role === 'user');
     const title = firstUser?.content.slice(0, 50) || 'Nouvelle conversation';
     const conversation: Conversation = {
       id: crypto.randomUUID(),
+      serverId,
       title,
       messages,
       createdAt: Date.now(),
@@ -57,7 +59,7 @@ export function useLocalConversations() {
     return conversation.id;
   }, [refresh]);
 
-  const update = useCallback((id: string, messages: Message[]): void => {
+  const update = useCallback((id: string, messages: Message[], serverId?: number): void => {
     if (messages.length === 0) return;
     const stored = readFromStorage();
     const idx = stored.findIndex(c => c.id === id);
@@ -65,6 +67,7 @@ export function useLocalConversations() {
     const firstUser = messages.find(m => m.role === 'user');
     stored[idx] = {
       ...stored[idx],
+      serverId: serverId ?? stored[idx].serverId,
       title: firstUser?.content.slice(0, 50) || stored[idx].title,
       messages,
       updatedAt: Date.now(),

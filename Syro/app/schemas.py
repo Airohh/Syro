@@ -1,7 +1,7 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field, EmailStr
 
 
 class Organization(BaseModel):
@@ -53,7 +53,8 @@ class LoginRequest(BaseModel):
 
 class MessageCreate(BaseModel):
     conversation_id: Optional[int] = None
-    content: str
+    content: str = Field(min_length=1, max_length=4000)
+    domain: Optional[str] = None  # absent / "general" = tous les documents
 
 
 class SourceCitation(BaseModel):
@@ -70,9 +71,10 @@ class MessageResponse(BaseModel):
 
 
 class DocumentTextUpload(BaseModel):
-    title: str
-    content: str
-    tags: str | None = None
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1)
+    tags: str | list[str] | None = None
+    domain: str | None = None
 
 
 class DocumentUploadResponse(BaseModel):
@@ -82,21 +84,14 @@ class DocumentUploadResponse(BaseModel):
     chunk_count: int = 0
 
 
-class OrganizationCreate(BaseModel):
-    name: str
-    credit_balance: int = 0
-    max_members: int = 5
-
-
 class OrganizationCreditUpdate(BaseModel):
     amount: int
 
 
 class UserCreate(BaseModel):
-    organization_id: int
     email: EmailStr
-    password: str
-    role: str = "member"
+    password: str = Field(min_length=8, max_length=72)
+    role: str = "member"  # admin | member (créé dans l'organisation de l'appelant)
 
 
 class DocumentStats(BaseModel):

@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS usage_events (
 CREATE TABLE IF NOT EXISTS conversations (
   id INTEGER PRIMARY KEY,
   organization_id INTEGER NOT NULL REFERENCES organizations(id),
+  user_id INTEGER REFERENCES users(id),  -- propriétaire (contrôle d'accès)
   title TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -125,6 +126,7 @@ CREATE TABLE IF NOT EXISTS documents (
   quality_level_id INTEGER DEFAULT 1 REFERENCES document_quality_levels(id),
   created_by_user_id INTEGER REFERENCES users(id),
   access_notes TEXT,
+  domain TEXT,  -- domaine (tech, mlops, …) : filtre Qdrant + BM25
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -134,13 +136,6 @@ CREATE TABLE IF NOT EXISTS doc_chunks (
   document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   text TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS doc_embeddings (
-  id INTEGER PRIMARY KEY,
-  chunk_id INTEGER NOT NULL REFERENCES doc_chunks(id) ON DELETE CASCADE,
-  organization_id INTEGER NOT NULL,
-  embedding BLOB NOT NULL
 );
 
 -- ============================================================================
@@ -200,6 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_status       ON documents(status);
 CREATE INDEX IF NOT EXISTS idx_documents_access       ON documents(access_level_id);
 CREATE INDEX IF NOT EXISTS idx_documents_quality      ON documents(quality_level_id);
 CREATE INDEX IF NOT EXISTS idx_documents_creator      ON documents(created_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_documents_domain       ON documents(organization_id, domain);
 CREATE INDEX IF NOT EXISTS idx_doc_chunks_doc         ON doc_chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_org      ON conversations(organization_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation  ON messages(conversation_id);

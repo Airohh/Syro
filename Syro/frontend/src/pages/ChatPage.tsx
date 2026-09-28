@@ -16,7 +16,10 @@ interface ChatPageProps {
 export default function ChatPage({ onLogout }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  // Deux identifiants distincts : l'id local (historique du navigateur) et
+  // l'id serveur (conversation API, dont l'historique nourrit le RAG).
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [serverConversationId, setServerConversationId] = useState<number | null>(null);
   const [currentDomain, setCurrentDomain] = useState<string>('general');
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -27,9 +30,9 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
   useEffect(() => {
     if (isLoadingHistory || messages.length === 0) return;
     if (conversationId) {
-      update(conversationId, messages);
+      update(conversationId, messages, serverConversationId ?? undefined);
     } else {
-      const newId = save(messages);
+      const newId = save(messages, serverConversationId ?? undefined);
       if (newId) setConversationId(newId);
     }
   }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -49,6 +52,7 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
   useEffect(() => {
     setMessages([]);
     setConversationId(null);
+    setServerConversationId(null);
   }, [currentDomain]);
 
   useEffect(() => {
@@ -67,7 +71,7 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
     setLoading(true);
 
     try {
-      const response = await chatService.sendMessage(content, conversationId, undefined, currentDomain);
+      const response = await chatService.sendMessage(content, serverConversationId, currentDomain);
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -75,8 +79,8 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
         sources: response.sources,
         usage: response.usage,
       };
+      setServerConversationId(response.conversation_id);
       setMessages(prev => [...prev, assistantMessage]);
-      if (!conversationId) setConversationId(response.conversation_id);
     } catch (error: any) {
       const errorMsg = error?.userMessage || error?.message || 'Désolé, une erreur est survenue.';
       const errorSolution = error?.solution ? `\n\n💡 ${error.solution}` : '';
@@ -93,13 +97,15 @@ export default function ChatPage({ onLogout }: ChatPageProps) {
   const handleNewConversation = () => {
     setMessages([]);
     setConversationId(null);
+    setServerConversationId(null);
     setIsLoadingHistory(false);
   };
 
-  const handleSelectConversation = (msgs: Message[], convId: string) => {
+  const handleSelectConversation = (msgs: Message[], convId: string, serverId?: number) => {
     setIsLoadingHistory(true);
     setMessages(msgs.map(m => ({ ...m, id: m.id || crypto.randomUUID() })));
     setConversationId(convId);
+    setServerConversationId(serverId ?? null);
     setTimeout(() => setIsLoadingHistory(false), 100);
   };
 

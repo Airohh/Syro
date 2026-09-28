@@ -1,10 +1,20 @@
-"""Helpers partagés pour scorer la pertinence retrieval (CRAG, Self-RAG)."""
+"""Pertinence d'un chunk en [0, 1], quelle que soit l'étape qui l'a scoré."""
 
 from __future__ import annotations
 
-# Score RRF typique d'un bon hit ; sert à normaliser en [0, 1].
-RRF_STRONG_SCORE = 0.05
+from typing import Any
+
+from ..config import settings
 
 
-def normalize_rrf_score(score: float) -> float:
-    return min(float(score) / RRF_STRONG_SCORE, 1.0)
+def rrf_strong_score() -> float:
+    """Score RRF d'un chunk classé 1er par le dense ET par BM25 (= pertinence 1.0)."""
+    return 2.0 / (settings.rrf_k + 1)
+
+
+def chunk_relevance(chunk: dict[str, Any]) -> float:
+    """Score cross-encoder s'il existe (déjà une probabilité), sinon RRF normalisé."""
+    if chunk.get("rerank_score") is not None:
+        return float(chunk["rerank_score"])
+    rrf = chunk.get("rrf_score", chunk.get("score", 0.0))
+    return min(float(rrf) / rrf_strong_score(), 1.0)

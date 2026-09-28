@@ -111,13 +111,18 @@ def update_user_permissions(
 
     # Vérifier que l'utilisateur appartient à la même organisation
     target_user = db.execute(
-        "SELECT organization_id FROM users WHERE id = ?", (user_id,)
+        "SELECT organization_id, role FROM users WHERE id = ?", (user_id,)
     ).fetchone()
 
     if not target_user or target_user["organization_id"] != org["id"]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found in this organization",
+        )
+    if target_user["role"] == "owner" and user["role"] != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an owner can change an owner's permissions",
         )
 
     # Vérifier si des permissions existent déjà

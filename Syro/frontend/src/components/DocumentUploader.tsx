@@ -188,7 +188,7 @@ export default function DocumentUploader({ onUploadSuccess, currentDomain = 'gen
             type="file"
             onChange={handleFileSelect}
             className="hidden"
-            accept=".pdf,.doc,.docx,.txt,.md"
+            accept=".pdf,.docx,.txt,.md,.csv"
           />
           <div className="space-y-2">
             <span className="text-4xl">📄</span>
@@ -202,7 +202,7 @@ export default function DocumentUploader({ onUploadSuccess, currentDomain = 'gen
               </button>
             </p>
             <p className="text-xs text-gray-500">
-              Formats supportés: PDF, DOC, DOCX, TXT, MD (max 50MB)
+              Formats supportés : PDF, DOCX, TXT, MD, CSV (max 50 Mo)
             </p>
           </div>
         </div>

@@ -1,37 +1,52 @@
-"""Qdrant vector store service for embeddings storage and retrieval."""
+"""Stockage vectoriel Qdrant : une seule collection, filtrée par payload.
+
+Chaque point porte `organization_id`, `document_id` et `domain` (indexés).
+Le multi-tenant et le multi-domaine sont donc de simples filtres, ce qui
+évite la prolifération de collections et les points orphelins lorsqu'un
+document change de domaine.
+"""
 
 from __future__ import annotations
 
+import logging
+import threading
 from typing import Any
 
 import numpy as np
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
-    PointStruct,
-    Filter,
     FieldCondition,
-    MatchValue,
+    Filter,
+    FilterSelector,
+    HnswConfigDiff,
     MatchAny,
+    MatchValue,
+    PayloadSchemaType,
+    PointStruct,
+    VectorParams,
 )
 
 from ..config import settings
-from .llm import get_embedding_vector, get_embedding_vectors
+
+logger = logging.getLogger(__name__)
 
 
 class VectorStoreError(Exception):
     pass
 
 
-# Client Qdrant partagé au niveau module : un seul QdrantClient (donc un seul
-# pool de connexions HTTP) réutilisé par toutes les instances VectorStore et
-# toutes les requêtes. Avant, chaque `VectorStore()` recréait un client et
-# refaisait un `get_collections()` de health-check à CHAQUE opération.
-_shared_client: QdrantClient | None = None
-
-# Nombre de points par upsert. Évite un seul upsert géant pour un gros document
-# (et reste bien plus efficace qu'un upsert par chunk).
 _UPSERT_BATCH_SIZE = 256
+_INDEXED_FIELDS = {
+    "organization_id": PayloadSchemaType.INTEGER,
+    "document_id": PayloadSchemaType.INTEGER,
+    "domain": PayloadSchemaType.KEYWORD,
+}
+
+# Client partagé (un seul pool HTTP) + collection vérifiée une fois par process.
+_shared_client: QdrantClient | None = None
+_collection_ready: set[str] = set()
+_lock = threading.Lock()
 
 
 def _get_shared_client() -> QdrantClient:
@@ -39,17 +54,14 @@ def _get_shared_client() -> QdrantClient:
     if _shared_client is None:
         try:
             client = QdrantClient(
-                url=settings.qdrant_url,
-                api_key=settings.qdrant_api_key,
-                timeout=10,
+                url=settings.qdrant_url, api_key=settings.qdrant_api_key, timeout=10
             )
             client.get_collections()  # valide la connexion une seule fois
             _shared_client = client
         except Exception as e:
-            error_msg = (
-                f"Failed to connect to Qdrant at {settings.qdrant_url}: {str(e)}"
-            )
-            raise VectorStoreError(error_msg) from e
+            raise VectorStoreError(
+                f"Failed to connect to Qdrant at {settings.qdrant_url}: {e}"
+            ) from e
     return _shared_client
 
 
@@ -57,225 +69,133 @@ def _reset_shared_client() -> None:
     """Force une reconnexion au prochain appel (après une erreur réseau)."""
     global _shared_client
     _shared_client = None
+    _collection_ready.clear()
+
+
+def domain_filter_value(domain: str | None) -> str | None:
+    """`None`/`general` = pas de filtre de domaine (recherche sur tout)."""
+    if not domain or domain == "general":
+        return None
+    return domain
+
+
+def build_filter(
+    organization_id: int,
+    domain: str | None = None,
+    allowed_document_ids: frozenset[int] | None = None,
+    filters: dict[str, Any] | None = None,
+) -> Filter:
+    must: list[FieldCondition] = [
+        FieldCondition(key="organization_id", match=MatchValue(value=organization_id))
+    ]
+    domain_value = domain_filter_value(domain)
+    if domain_value:
+        must.append(FieldCondition(key="domain", match=MatchValue(value=domain_value)))
+    if allowed_document_ids is not None:
+        must.append(
+            FieldCondition(
+                key="document_id", match=MatchAny(any=sorted(allowed_document_ids))
+            )
+        )
+    for key, value in (filters or {}).items():
+        must.append(FieldCondition(key=key, match=MatchValue(value=value)))
+    return Filter(must=must)
 
 
 class VectorStore:
-    def __init__(
-        self, collection_name: str | None = None, domain: str | None = None
-    ) -> None:
-        if collection_name:
-            self.collection_name = collection_name
-        elif domain:
-            self.collection_name = self._get_collection_for_domain(domain)
-        else:
-            self.collection_name = settings.qdrant_collection_name
+    def __init__(self, collection_name: str | None = None) -> None:
+        self.collection_name = collection_name or settings.qdrant_collection_name
 
-    @staticmethod
-    def _get_collection_for_domain(domain: str) -> str:
-        if not getattr(settings, "enable_domain_routing", True):
-            return settings.qdrant_collection_name
-
-        if not domain or domain == "general":
-            return settings.qdrant_collection_name
-
-        base_name = settings.qdrant_collection_name.replace("_chunks", "")
-        return f"{base_name}_{domain}_chunks"
-
-    def _get_client(self) -> QdrantClient:
+    def _client(self) -> QdrantClient:
         return _get_shared_client()
 
-    def _ensure_collection(self, collection_name: str | None = None) -> None:
-        try:
-            client = self._get_client()
-            collections = client.get_collections().collections
-            collection_names = [c.name for c in collections]
-
-            target_collection = collection_name or self.collection_name
-
-            if target_collection not in collection_names:
-                from qdrant_client.models import HnswConfigDiff, OptimizersConfigDiff
-
-                if settings.performance_mode == "fast":
-                    hnsw_config = HnswConfigDiff(m=16, ef_construct=64)
-                    optimizer_config = OptimizersConfigDiff(indexing_threshold=10000)
-                else:
-                    hnsw_config = HnswConfigDiff(m=32, ef_construct=200)
-                    optimizer_config = OptimizersConfigDiff(indexing_threshold=20000)
-
+    def ensure_collection(self) -> None:
+        if self.collection_name in _collection_ready:
+            return
+        with _lock:
+            if self.collection_name in _collection_ready:
+                return
+            client = self._client()
+            existing = {c.name for c in client.get_collections().collections}
+            if self.collection_name not in existing:
                 client.create_collection(
-                    collection_name=target_collection,
-                    vectors_config={
-                        "size": settings.embedding_dimensions,
-                        "distance": Distance.COSINE,
-                        "hnsw_config": hnsw_config,
-                    },
-                    optimizers_config=optimizer_config,
+                    collection_name=self.collection_name,
+                    vectors_config=VectorParams(
+                        size=settings.embedding_dimensions,
+                        distance=Distance.COSINE,
+                    ),
+                    hnsw_config=HnswConfigDiff(m=16, ef_construct=128),
                 )
-        except VectorStoreError:
-            raise
-        except Exception as e:
-            _reset_shared_client()
-            error_msg = (
-                f"Failed to ensure collection '{self.collection_name}': {str(e)}"
-            )
-            raise VectorStoreError(error_msg) from e
-
-    def add_chunk(
-        self,
-        chunk_id: str,
-        organization_id: int,
-        document_id: int,
-        text: str,
-        embedding: np.ndarray | None = None,
-        metadata: dict[str, Any] | None = None,
-        domain: str | None = None,
-    ) -> None:
-        try:
-            target_collection = (
-                self._get_collection_for_domain(domain)
-                if domain
-                else self.collection_name
-            )
-            self._ensure_collection(target_collection)
-
-            client = self._get_client()
-
-            if embedding is None:
-                embedding = get_embedding_vector(text)
-
-            try:
-                point_id = (
-                    int(chunk_id.split("_")[-1]) if "_" in chunk_id else int(chunk_id)
+            else:
+                info = client.get_collection(self.collection_name)
+                size = getattr(info.config.params.vectors, "size", None)
+                if size is not None and size != settings.embedding_dimensions:
+                    raise VectorStoreError(
+                        f"Collection '{self.collection_name}' has vectors of size "
+                        f"{size} but EMBEDDING_DIMENSIONS={settings.embedding_dimensions}. "
+                        "Changing the embedding model requires a new collection "
+                        "(set QDRANT_COLLECTION_NAME) and a reindex (make reindex)."
+                    )
+            for field, schema in _INDEXED_FIELDS.items():
+                # Idempotent côté Qdrant ; indispensable pour filtrer vite.
+                client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name=field,
+                    field_schema=schema,
                 )
-            except (ValueError, IndexError):
-                point_id = abs(hash(chunk_id)) % (2**63)
+            _collection_ready.add(self.collection_name)
 
-            payload = {
-                "chunk_id": chunk_id,
-                "organization_id": organization_id,
-                "document_id": document_id,
-                "text": text,
-                **(metadata or {}),
-            }
-
-            point = PointStruct(
-                id=point_id,
-                vector=embedding.tolist(),
-                payload=payload,
-            )
-
-            client.upsert(
-                collection_name=target_collection,
-                points=[point],
-            )
-        except VectorStoreError:
-            raise
-        except Exception as e:
-            _reset_shared_client()
-            error_msg = f"Failed to add chunk to Qdrant: {str(e)}"
-            raise VectorStoreError(error_msg) from e
-
-    def add_chunks_batch(
+    def upsert_chunks(
         self,
         chunks: list[dict[str, Any]],
-        organization_id: int,
-        document_id: int,
-        domain: str | None = None,
+        embeddings: list[np.ndarray],
     ) -> None:
-        """Indexe plusieurs chunks en lot. `chunks` = liste de dicts
-        {chunk_id: str, text: str, metadata: dict}. Embeddings calculés en un
-        seul appel réseau, collection vérifiée une fois, upsert par paquets.
-        Remplace N×(ensure_collection + embed + upsert) par 1+1+ceil(N/256)."""
+        """`chunks` = [{id: int, text: str, payload: dict}] (id = id SQLite)."""
         if not chunks:
             return
         try:
-            target_collection = (
-                self._get_collection_for_domain(domain)
-                if domain
-                else self.collection_name
-            )
-            self._ensure_collection(target_collection)
-            client = self._get_client()
-
-            texts = [c["text"] for c in chunks]
-            embeddings = get_embedding_vectors(texts)
-
-            points: list[PointStruct] = []
-            for chunk, embedding in zip(chunks, embeddings):
-                chunk_id = chunk["chunk_id"]
-                try:
-                    point_id = (
-                        int(chunk_id.split("_")[-1])
-                        if "_" in chunk_id
-                        else int(chunk_id)
-                    )
-                except (ValueError, IndexError):
-                    point_id = abs(hash(chunk_id)) % (2**63)
-
-                payload = {
-                    "chunk_id": chunk_id,
-                    "organization_id": organization_id,
-                    "document_id": document_id,
-                    "text": chunk["text"],
-                    **(chunk.get("metadata") or {}),
-                }
-                points.append(
-                    PointStruct(id=point_id, vector=embedding.tolist(), payload=payload)
+            self.ensure_collection()
+            points = [
+                PointStruct(
+                    id=int(chunk["id"]),
+                    vector=np.asarray(vec, dtype=np.float32).tolist(),
+                    payload={"text": chunk["text"], **chunk["payload"]},
                 )
-
+                for chunk, vec in zip(chunks, embeddings)
+            ]
+            client = self._client()
             for start in range(0, len(points), _UPSERT_BATCH_SIZE):
                 client.upsert(
-                    collection_name=target_collection,
+                    collection_name=self.collection_name,
                     points=points[start : start + _UPSERT_BATCH_SIZE],
                 )
         except VectorStoreError:
             raise
         except Exception as e:
             _reset_shared_client()
-            error_msg = f"Failed to add chunks batch to Qdrant: {str(e)}"
-            raise VectorStoreError(error_msg) from e
+            raise VectorStoreError(f"Failed to upsert chunks in Qdrant: {e}") from e
 
-    def delete_chunks_by_document(
-        self, document_id: int, domain: str | None = None
-    ) -> None:
+    def delete_document(self, document_id: int) -> None:
         try:
-            client = self._get_client()
-            target_collection = (
-                self._get_collection_for_domain(domain)
-                if domain
-                else self.collection_name
-            )
-
-            doc_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="document_id",
-                        match=MatchValue(value=document_id),
+            self.ensure_collection()
+            self._client().delete(
+                collection_name=self.collection_name,
+                points_selector=FilterSelector(
+                    filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="document_id",
+                                match=MatchValue(value=document_id),
+                            )
+                        ]
                     )
-                ]
+                ),
             )
-
-            # Paginate: un document peut avoir plus de chunks que la limite
-            # d'un seul scroll (sinon les points au-delà restent orphelins).
-            while True:
-                points, next_page_offset = client.scroll(
-                    collection_name=target_collection,
-                    scroll_filter=doc_filter,
-                    limit=100,
-                )
-                if points:
-                    client.delete(
-                        collection_name=target_collection,
-                        points_selector=[point.id for point in points],
-                    )
-                if not points or next_page_offset is None:
-                    break
         except VectorStoreError:
             raise
         except Exception as e:
             _reset_shared_client()
-            error_msg = f"Failed to delete chunks from Qdrant: {str(e)}"
-            raise VectorStoreError(error_msg) from e
+            raise VectorStoreError(f"Failed to delete chunks from Qdrant: {e}") from e
 
     def search(
         self,
@@ -286,80 +206,43 @@ class VectorStore:
         domain: str | None = None,
         allowed_document_ids: frozenset[int] | None = None,
     ) -> list[dict[str, Any]]:
+        if allowed_document_ids is not None and not allowed_document_ids:
+            return []
         try:
-            if allowed_document_ids is not None and not allowed_document_ids:
-                return []
-
-            client = self._get_client()
-            target_collection = (
-                self._get_collection_for_domain(domain)
-                if domain
-                else self.collection_name
-            )
-            query_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="organization_id",
-                        match=MatchValue(value=organization_id),
-                    )
-                ]
-            )
-
-            if allowed_document_ids is not None:
-                query_filter.must.append(
-                    FieldCondition(
-                        key="document_id",
-                        match=MatchAny(any=sorted(allowed_document_ids)),
-                    )
-                )
-
-            if filters:
-                for key, value in filters.items():
-                    query_filter.must.append(
-                        FieldCondition(
-                            key=key,
-                            match=MatchValue(value=value),
-                        )
-                    )
-
-            results = client.search(
-                collection_name=target_collection,
-                query_vector=query_vector.tolist(),
-                query_filter=query_filter,
+            self.ensure_collection()
+            response = self._client().query_points(
+                collection_name=self.collection_name,
+                query=np.asarray(query_vector, dtype=np.float32).tolist(),
+                query_filter=build_filter(
+                    organization_id, domain, allowed_document_ids, filters
+                ),
                 limit=top_k,
+                with_payload=True,
             )
-
-            return [
-                {
-                    "chunk_id": result.id,
-                    "text": result.payload.get("text", ""),
-                    "score": result.score,
-                    "metadata": {
-                        k: v
-                        for k, v in result.payload.items()
-                        if k not in ("text", "chunk_id")
-                    },
-                }
-                for result in results
-            ]
         except VectorStoreError:
             raise
         except Exception as e:
             _reset_shared_client()
-            error_msg = f"Failed to search in Qdrant: {str(e)}"
-            raise VectorStoreError(error_msg) from e
+            raise VectorStoreError(f"Failed to search in Qdrant: {e}") from e
 
-    def get_collection_status(self, domain: str | None = None) -> dict[str, Any]:
+        return [
+            {
+                "chunk_id": point.id,
+                "text": (point.payload or {}).get("text", ""),
+                "score": point.score,
+                "metadata": {
+                    k: v for k, v in (point.payload or {}).items() if k != "text"
+                },
+            }
+            for point in response.points
+        ]
+
+    def get_collection_status(self) -> dict[str, Any]:
         try:
-            client = self._get_client()
-            target_collection = (
-                self._get_collection_for_domain(domain)
-                if domain
-                else self.collection_name
-            )
-            info = client.get_collection(target_collection)
+            self.ensure_collection()
+            info = self._client().get_collection(self.collection_name)
             return {
-                "name": target_collection,
+                "name": self.collection_name,
                 "vector_size": info.config.params.vectors.size,
                 "points_count": info.points_count,
                 "status": str(info.status),
@@ -368,5 +251,4 @@ class VectorStore:
             raise
         except Exception as e:
             _reset_shared_client()
-            error_msg = f"Failed to get collection status: {str(e)}"
-            raise VectorStoreError(error_msg) from e
+            raise VectorStoreError(f"Failed to get collection status: {e}") from e
