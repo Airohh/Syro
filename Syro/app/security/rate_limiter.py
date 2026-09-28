@@ -116,7 +116,7 @@ class RedisRateLimiter:
 
 # Rate limiters globaux
 chat_rate_limiter = RedisRateLimiter(limit=30, window_seconds=60)
-doc_upload_rate_limiter = RedisRateLimiter(limit=10, window_seconds=60)
+doc_upload_rate_limiter = RedisRateLimiter(limit=30, window_seconds=60)
 auth_rate_limiter = RedisRateLimiter(
     limit=5, window_seconds=60
 )  # Limite stricte pour login

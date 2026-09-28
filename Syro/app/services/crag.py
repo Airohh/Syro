@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from ..config import settings
 from .hybrid_search import hybrid_search
 from .query_rewriter import expand_queries
-from .retrieval_scoring import normalize_rrf_score
+from .retrieval_scoring import chunk_relevance
 
 if TYPE_CHECKING:
     import numpy as np
@@ -39,10 +39,10 @@ def lexical_overlap(query: str, chunk_texts: list[str]) -> float:
 
 
 def top_retrieval_strength(chunks: list[dict[str, Any]]) -> float:
-    """Normalise le score RRF du meilleur chunk (0–1)."""
+    """Pertinence (0–1) du meilleur chunk : cross-encoder, sinon RRF normalisé."""
     if not chunks:
         return 0.0
-    return normalize_rrf_score(chunks[0].get("score", 0.0))
+    return max(chunk_relevance(c) for c in chunks)
 
 
 def assess_retrieval_quality(
@@ -50,7 +50,7 @@ def assess_retrieval_quality(
     chunks: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """
-    Évaluateur léger sans LLM : overlap lexical + force du top score RRF.
+    Évaluateur léger sans LLM : overlap lexical + pertinence du meilleur chunk.
 
     Retourne verdict (correct | ambiguous | incorrect), score combiné [0–1].
     """

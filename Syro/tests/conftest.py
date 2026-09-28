@@ -110,3 +110,58 @@ def mock_org():
         "credit_balance": 100.0,
         "max_members": 10,
     }
+
+
+@pytest.fixture
+def syro_db(tmp_path, monkeypatch):
+    """Vraie base SQLite (schéma complet) dans un dossier temporaire.
+
+    Org 1 : demo@syro.local (owner, id 1) + member@org1 (member, id 2)
+    Org 2 : other@org2 (owner, id 3)
+    """
+    import sqlite3
+
+    from app.config import settings
+    from scripts.init_db import init_db
+
+    db_path = tmp_path / "syro.db"
+    monkeypatch.setenv("DB_PATH", str(db_path))
+    monkeypatch.setattr(settings, "db_path", db_path)
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    init_db(verbose=False)
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO users (id, organization_id, email, password_hash, role) "
+        "VALUES (2, 1, 'member@org1', 'x', 'member')"
+    )
+    conn.execute(
+        "INSERT INTO organizations (id, name, credit_balance) VALUES (2, 'Other', 1000)"
+    )
+    conn.execute(
+        "INSERT INTO users (id, organization_id, email, password_hash, role) "
+        "VALUES (3, 2, 'other@org2', 'x', 'owner')"
+    )
+    conn.commit()
+    conn.close()
+    return db_path
+
+
+def add_document(db_path, org_id, filename, text, domain=None, chunks=None):
+    """Insère un document actif + ses chunks (sans Qdrant). Retourne l'id."""
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.execute(
+        "INSERT INTO documents (organization_id, filename, storage_path, domain, "
+        "status, ingestion_status) VALUES (?, ?, '', ?, 'active', 'complete')",
+        (org_id, filename, domain),
+    )
+    doc_id = cur.lastrowid
+    for i, chunk in enumerate(chunks or [text]):
+        conn.execute(
+            "INSERT INTO doc_chunks (document_id, chunk_index, text) VALUES (?, ?, ?)",
+            (doc_id, i, chunk),
+        )
+    conn.commit()
+    conn.close()
+    return doc_id

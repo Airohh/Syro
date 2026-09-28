@@ -1,62 +1,21 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+**/__pycache__/
+**/*.py[cod]
 .venv/
 venv/
-ENV/
-env/
-*.egg-info/
-dist/
-build/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Environment
 .env
-.env.local
-.env.*.local
-
-# Logs
+.env.*
 *.log
-logs/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Tests
 .pytest_cache/
 .coverage
 htmlcov/
-.tox/
-.hypothesis/
-
-# Documentation
-*.md
-docs/
-
-# Git
 .git/
-.gitignore
-
-# Docker
-Dockerfile
-.dockerignore
-docker-compose.yml
-
-# Database
-*.db
-*.db-journal
-
-# Storage
+frontend/
+docs/
 storage/
 tmp/
-
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+evaluation/results.json
+evaluation/report.json

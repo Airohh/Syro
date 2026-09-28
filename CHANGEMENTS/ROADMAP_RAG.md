@@ -6,6 +6,8 @@
 >
 > **Dernière mise à jour** : 2026-06-28 · **Statut global** : 🟢 E0 complète · E1 en cours · **E2** T2.1–T2.3 ✅ code
 
+> ⚠️ **2026-09-28** — remise à plat du projet : voir `CHANGEMENTS.md` (session du 2026-09-28) et `ADR-002`. Certains points ci-dessous (collections par domaine, `_domain_from_tags`, mode adaptatif) sont obsolètes.
+
 > **Journal de progression**
 > - `2026-06-28` — **T2.3 ✅** : `evaluation/tune.py` grid-search `rrf_k` (30/40/60) sur golden set ; `make tune` ; tests `test_tune.py` (4).
 > - `2026-06-28` — **T2.2 ✅** : HyDE (`hyde.py`, flag `enable_hyde`, vecteur additionnel dans `hybrid_search`) ; tests `test_hyde.py` (5).

@@ -1,215 +1,75 @@
-"""Configuration des domaines Syro."""
+"""Domaines Syro : une persona par domaine.
+
+Un domaine sert à deux choses : (1) la persona du LLM et (2) un filtre
+optionnel de retrieval quand l'utilisateur choisit explicitement un domaine.
+Les règles RAG (citer, ne pas inventer…) sont communes : voir llm.RAG_RULES.
+"""
 
 from dataclasses import dataclass
 from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class DomainConfig:
-    """Configuration d'un domaine Syro."""
-
     name: str
     description: str
-    system_prompt: str
-    document_types: list[str]
-    default_tags: list[str]
+    persona: str
 
 
 DOMAINS: dict[str, DomainConfig] = {
+    "general": DomainConfig(
+        name="Syro",
+        description="Assistant généraliste : cherche dans tous vos documents",
+        persona="Tu es Syro, un assistant qui répond à partir des documents de l'utilisateur.",
+    ),
     "tech": DomainConfig(
         name="SyroTech",
         description="Assistant expert en Data Engineering et technologies",
-        system_prompt="""Tu es SyroTech, un assistant expert en Data Engineering, Python, SQL, Cloud et Architecture Data.
-
-Instructions importantes :
-1. Utilise UNIQUEMENT le contexte fourni. Ne génère pas d'informations non présentes dans les sources.
-2. Cite tes sources en référençant [Source X] dans ta réponse.
-3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
-4. Réponds de manière claire, précise et structurée.
-5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=[
-            "snowflake",
-            "pandas",
-            "airflow",
-            "databricks",
-            "azure",
-            "terraform",
-            "sql",
-            "python",
-            "spark",
-            "general",
-        ],
-        default_tags=["tech", "data-engineering", "python"],
-    ),
-    "medical": DomainConfig(
-        name="SyroMed",
-        description="Assistant expert en médecine et santé",
-        system_prompt="""Tu es SyroMed, un assistant expert en médecine, pathologies, diagnostics et traitements.
-
-Instructions importantes :
-1. Utilise UNIQUEMENT le contexte fourni. Ne génère pas d'informations non présentes dans les sources.
-2. Cite tes sources en référençant [Source X] dans ta réponse.
-3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
-4. Réponds de manière claire, précise et structurée.
-5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=[
-            "pathology",
-            "treatment",
-            "anatomy",
-            "pharmacology",
-            "protocol",
-            "research",
-            "general",
-        ],
-        default_tags=["medical", "health", "medicine"],
-    ),
-    "legal": DomainConfig(
-        name="SyroLegal",
-        description="Assistant expert en droit et jurisprudence",
-        system_prompt="""Tu es SyroLegal, un assistant expert en droit civil, commercial, pénal et réglementation.
-
-Instructions importantes :
-1. Utilise UNIQUEMENT le contexte fourni. Ne génère pas d'informations non présentes dans les sources.
-2. Cite tes sources en référençant [Source X] dans ta réponse.
-3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
-4. Réponds de manière claire, précise et structurée.
-5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=[
-            "civil",
-            "commercial",
-            "penal",
-            "jurisprudence",
-            "contract",
-            "regulation",
-            "procedure",
-            "general",
-        ],
-        default_tags=["legal", "law", "jurisprudence"],
-    ),
-    "finance": DomainConfig(
-        name="SyroFinance",
-        description="Assistant expert en finance et comptabilité",
-        system_prompt="""Tu es SyroFinance, un assistant expert en finance, comptabilité, investissements et marchés financiers.
-
-Instructions importantes :
-1. Utilise UNIQUEMENT le contexte fourni. Ne génère pas d'informations non présentes dans les sources.
-2. Cite tes sources en référençant [Source X] dans ta réponse.
-3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
-4. Réponds de manière claire, précise et structurée.
-5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=[
-            "analysis",
-            "accounting",
-            "investment",
-            "markets",
-            "tax",
-            "portfolio",
-            "economics",
-            "general",
-        ],
-        default_tags=["finance", "accounting", "investment"],
-    ),
-    "education": DomainConfig(
-        name="SyroEdu",
-        description="Assistant expert en pédagogie et éducation",
-        system_prompt="""Tu es SyroEdu, un assistant expert en pédagogie, éducation et didactique.
-
-Instructions importantes :
-1. Utilise UNIQUEMENT le contexte fourni. Ne génère pas d'informations non présentes dans les sources.
-2. Cite tes sources en référençant [Source X] dans ta réponse.
-3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
-4. Réponds de manière claire, précise et structurée.
-5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=[
-            "pedagogy",
-            "curriculum",
-            "assessment",
-            "psychology",
-            "resources",
-            "didactics",
-            "general",
-        ],
-        default_tags=["education", "pedagogy", "teaching"],
+        persona="Tu es SyroTech, un assistant expert en Data Engineering, Python, SQL, Cloud et architecture logicielle.",
     ),
     "mlops": DomainConfig(
         name="SyroMLOps",
         description="Assistant expert en MLOps et déploiement ML",
-        system_prompt="""Tu es SyroMLOps, un assistant expert en MLOps, déploiement ML, monitoring et CI/CD ML.
-
-Instructions importantes :
-1. Utilise UNIQUEMENT le contexte fourni. Ne génère pas d'informations non présentes dans les sources.
-2. Cite tes sources en référençant [Source X] dans ta réponse.
-3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
-4. Réponds de manière claire, précise et structurée.
-5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=[
-            "mlflow",
-            "kubeflow",
-            "seldon",
-            "airflow",
-            "prefect",
-            "dagster",
-            "dvc",
-            "feast",
-            "tecton",
-            "sagemaker",
-            "azure-ml",
-            "vertex-ai",
-            "monitoring",
-            "experimentation",
-            "feature-store",
-            "model-serving",
-            "ci-cd",
-            "general",
-        ],
-        default_tags=["mlops", "machine-learning", "devops"],
+        persona="Tu es SyroMLOps, un assistant expert en MLOps, déploiement de modèles, monitoring et CI/CD ML.",
     ),
-    "general": DomainConfig(
-        name="Syro",
-        description="Assistant généraliste polyvalent",
-        system_prompt="""Tu es Syro, un assistant intelligent et polyvalent.
-
-Instructions importantes :
-1. Utilise UNIQUEMENT le contexte fourni. Ne génère pas d'informations non présentes dans les sources.
-2. Cite tes sources en référençant [Source X] dans ta réponse.
-3. Si le contexte ne contient pas assez d'informations, dis-le clairement.
-4. Réponds de manière claire, précise et structurée.
-5. Adapte ton style et ton niveau de détail selon le sujet traité.""",
-        document_types=["general"],
-        default_tags=["general"],
+    "medical": DomainConfig(
+        name="SyroMed",
+        description="Assistant expert en médecine et santé",
+        persona="Tu es SyroMed, un assistant expert en médecine. Tu rappelles que tes réponses ne remplacent pas un avis médical.",
+    ),
+    "legal": DomainConfig(
+        name="SyroLegal",
+        description="Assistant expert en droit et jurisprudence",
+        persona="Tu es SyroLegal, un assistant expert en droit civil, commercial, pénal et réglementation.",
+    ),
+    "finance": DomainConfig(
+        name="SyroFinance",
+        description="Assistant expert en finance et comptabilité",
+        persona="Tu es SyroFinance, un assistant expert en finance, comptabilité et marchés financiers.",
+    ),
+    "education": DomainConfig(
+        name="SyroEdu",
+        description="Assistant expert en pédagogie et éducation",
+        persona="Tu es SyroEdu, un assistant expert en pédagogie et éducation.",
     ),
 }
 
 
 def get_domain_config(domain: str | None = None) -> DomainConfig:
-    """
-    Get domain configuration.
+    """Config du domaine ; `general` si inconnu ou absent."""
+    return DOMAINS.get((domain or "general").lower(), DOMAINS["general"])
 
-    Args:
-        domain: Domain name (tech, medical, legal, finance, education, mlops, general)
-               If None, returns 'general' domain.
 
-    Returns:
-        DomainConfig instance
-    """
-    if domain is None:
-        domain = "general"
-
-    domain_lower = domain.lower()
-    if domain_lower not in DOMAINS:
-        return DOMAINS["general"]
-
-    return DOMAINS[domain_lower]
+def normalize_domain(domain: str | None) -> str | None:
+    """Domaine valide en minuscules, ou None si absent/inconnu."""
+    if not domain:
+        return None
+    domain = domain.strip().lower()
+    return domain if domain in DOMAINS else None
 
 
 def list_domains() -> list[dict[str, Any]]:
-    """List all available domains with their information."""
     return [
-        {
-            "id": domain_id,
-            "name": config.name,
-            "description": config.description,
-            "document_types": config.document_types,
-        }
-        for domain_id, config in DOMAINS.items()
+        {"id": domain_id, "name": cfg.name, "description": cfg.description}
+        for domain_id, cfg in DOMAINS.items()
     ]

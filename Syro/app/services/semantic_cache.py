@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -50,6 +51,7 @@ def _pipeline_key() -> tuple[Any, ...]:
         settings.enable_crag,
         settings.enable_query_decomposition,
         settings.enable_reranking,
+        settings.rerank_min_score,
         settings.rrf_k,
         settings.retrieval_top_k,
         settings.rerank_top_k,
@@ -62,7 +64,10 @@ def _scope_key(
     allowed_document_ids: frozenset[int] | None,
     filters: dict[str, Any] | None = None,
     history: Sequence[str] | None = None,
+    version: Any = None,
 ) -> CacheScopeKey:
+    # `version` = empreinte du contenu indexé : une ingestion faite par le
+    # worker (autre processus) change la clé → pas de résultat périmé servi.
     return (
         organization_id,
         domain or "",
@@ -70,6 +75,7 @@ def _scope_key(
         _filters_key(filters),
         _history_key(history),
         _pipeline_key(),
+        version,
     )
 
 
@@ -86,6 +92,7 @@ class SemanticCache:
 
     def __init__(self) -> None:
         self._entries: dict[CacheScopeKey, list[_CacheEntry]] = {}
+        self._lock = threading.Lock()  # requêtes servies en parallèle (threadpool)
 
     def lookup_retrieval(
         self,
@@ -97,6 +104,7 @@ class SemanticCache:
         allowed_document_ids: frozenset[int] | None = None,
         filters: dict[str, Any] | None = None,
         history: Sequence[str] | None = None,
+        version: Any = None,
     ) -> tuple[list[dict[str, Any]] | None, str]:
         """Retourne (chunks, status) avec status hit|miss|disabled."""
         if not settings.enable_semantic_cache:
@@ -108,26 +116,22 @@ class SemanticCache:
             allowed_document_ids,
             filters=filters,
             history=history,
+            version=version,
         )
         now = time.time()
         ttl = settings.semantic_cache_ttl_seconds
         threshold = settings.semantic_cache_similarity_threshold
 
-        entries = self._entries.get(key, [])
-        alive: list[_CacheEntry] = []
         best: _CacheEntry | None = None
         best_sim = -1.0
-
-        for entry in entries:
-            if now - entry.created_at > ttl:
-                continue
-            alive.append(entry)
+        with self._lock:
+            alive = [e for e in self._entries.get(key, []) if now - e.created_at <= ttl]
+            self._entries[key] = alive
+        for entry in alive:
             sim = _cosine_similarity(query_embedding, entry.embedding)
             if sim >= threshold and sim > best_sim:
                 best = entry
                 best_sim = sim
-
-        self._entries[key] = alive
 
         if best is not None:
             logger.debug(
@@ -151,6 +155,7 @@ class SemanticCache:
         allowed_document_ids: frozenset[int] | None = None,
         filters: dict[str, Any] | None = None,
         history: Sequence[str] | None = None,
+        version: Any = None,
     ) -> None:
         if not settings.enable_semantic_cache or not chunks:
             return
@@ -161,29 +166,24 @@ class SemanticCache:
             allowed_document_ids,
             filters=filters,
             history=history,
+            version=version,
         )
         entry = _CacheEntry(
             query=query,
             embedding=query_embedding.copy(),
             chunks=_copy_chunks(chunks),
         )
-        bucket = self._entries.setdefault(key, [])
-        bucket.append(entry)
-
-        max_entries = settings.semantic_cache_max_entries
-        if len(bucket) > max_entries:
-            bucket.sort(key=lambda e: e.created_at)
-            del bucket[: len(bucket) - max_entries]
+        with self._lock:
+            bucket = self._entries.setdefault(key, [])
+            bucket.append(entry)
+            max_entries = settings.semantic_cache_max_entries
+            if len(bucket) > max_entries:
+                del bucket[: len(bucket) - max_entries]  # entrées ajoutées dans l'ordre
 
     def invalidate_organization(self, organization_id: int) -> None:
-        keys = [k for k in self._entries if k[0] == organization_id]
-        for key in keys:
-            del self._entries[key]
-
-    def invalidate_domain(self, organization_id: int, domain: str) -> None:
-        keys = [k for k in self._entries if k[0] == organization_id and k[1] == domain]
-        for key in keys:
-            del self._entries[key]
+        with self._lock:
+            for key in [k for k in self._entries if k[0] == organization_id]:
+                del self._entries[key]
 
 
 semantic_cache = SemanticCache()

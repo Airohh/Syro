@@ -1,0 +1,5 @@
+# Reranker cross-encoder (torch). En Docker : torch CPU via
+#   pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-ml.txt
+# Sans ces paquets, Syro fonctionne (ordre RRF, pas de seuil d'abstention).
+sentence-transformers==3.0.1
+FlagEmbedding==1.2.8

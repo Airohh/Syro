@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +6,7 @@ from fastapi.responses import Response, JSONResponse
 
 from .config import settings
 from .domains import get_domain_config, list_domains
-from .routers import admin, agents, auth, chat, documents, mlops, profile, permissions
+from .routers import admin, auth, chat, documents, mlops, permissions, profile
 from .services.vector_store import VectorStoreError
 from .middleware import (
     CorrelationIDMiddleware,
@@ -33,16 +33,19 @@ def resolve_cors_settings(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Refus de démarrer en prod (debug=False) avec le secret par défaut.
-    settings.validate_production_secrets()
-    try:
-        from scripts.init_db import init_db
+    # Secret JWT : fourni par l'env, sinon généré une fois et persisté.
+    settings.ensure_secret_key()
+    from scripts.init_db import init_db
 
-        init_db()
-    except Exception as e:
-        import logging
+    init_db(verbose=False)  # crée / met à niveau la base, compte démo au 1er lancement
+    if settings.enable_reranking and settings.reranker_preload:
+        # Chargement du cross-encoder en arrière-plan : l'API répond tout de
+        # suite et la 1re question n'attend pas le chargement du modèle.
+        import threading
 
-        logging.getLogger(__name__).warning("DB init skipped: %s", e)
+        from .services.reranker import reranker
+
+        threading.Thread(target=reranker.warmup, daemon=True).start()
     yield
 
 
@@ -101,7 +104,6 @@ app.include_router(documents.domain_router)  # Routes multi-domaines pour docume
 app.include_router(profile.router)
 app.include_router(permissions.router)
 app.include_router(admin.router)
-app.include_router(agents.router)
 app.include_router(mlops.router)
 
 
@@ -112,7 +114,7 @@ async def vector_store_error_handler(request: Request, exc: VectorStoreError):
         content={
             "error": "Qdrant connection failed",
             "message": str(exc),
-            "solution": "Please ensure Qdrant is running: docker-compose up -d qdrant",
+            "solution": "Please ensure Qdrant is running: docker compose up -d qdrant",
         },
     )
 
@@ -124,6 +126,35 @@ def healthcheck():
         "status": "ok",
         "domain": settings.domain,
         "app_name": domain_config.name,
+    }
+
+
+@app.get("/health/ready")
+def readiness():
+    """État des dépendances (utile pour la démo et le diagnostic)."""
+    from .services.llm import provider
+    from .services.reranker import reranker
+    from .services.vector_store import VectorStore
+
+    try:
+        qdrant = VectorStore().get_collection_status()
+        qdrant_status = {"ok": True, "points": qdrant["points_count"]}
+    except Exception as e:  # noqa: BLE001
+        qdrant_status = {"ok": False, "error": str(e)[:200]}
+    return {
+        "qdrant": qdrant_status,
+        "llm": {
+            "ok": provider._chat_model is not None,
+            "provider": settings.llm_provider,
+            "chat_model": settings.chat_model,
+            "embeddings_model": settings.embeddings_model,
+        },
+        "reranker": {
+            "enabled": settings.enable_reranking,
+            "loaded": reranker._model is not None,
+            "failed": reranker._load_failed,  # modèle absent / non installé
+            "model": settings.reranker_model,
+        },
     }
 
 

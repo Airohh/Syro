@@ -25,19 +25,7 @@ def _parse_rewrite_lines(text: str) -> list[str]:
 
 def _llm_rewrite_variants(query: str, history: Sequence[str] | None) -> list[str]:
     """Appelle le chat LLM pour produire 1–2 reformulations (sans l'originale)."""
-    # Import local pour éviter les cycles et garder les tests légers.
-    from .llm import provider
-
-    if not provider._chat_model:
-        return []
-
-    try:
-        from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
-    except ImportError:
-        return []
-
-    if not provider._chat_breaker.allow():
-        return []
+    from .llm import complete
 
     history_lines = ""
     if history:
@@ -45,29 +33,14 @@ def _llm_rewrite_variants(query: str, history: Sequence[str] | None) -> list[str
         history_lines = (
             "Contexte récent:\n" + "\n".join(f"- {h}" for h in recent) + "\n\n"
         )
-
-    system = (
+    text = complete(
         "Tu aides une recherche documentaire. Propose 1 à 2 reformulations courtes "
         "de la question (synonymes, termes techniques, formulation alternative). "
-        "Une reformulation par ligne, sans numérotation ni explication."
+        "Si la question fait référence à l'historique (« et pour X ? »), rends-la "
+        "autonome. Une reformulation par ligne, sans numérotation ni explication.",
+        f"{history_lines}Question: {query}",
     )
-    user = f"{history_lines}Question: {query}"
-
-    try:
-        response = provider._chat_model.invoke(
-            [SystemMessage(content=system), HumanMessage(content=user)]
-        )
-        text = (
-            response.content
-            if isinstance(response.content, str)
-            else str(response.content)
-        )
-        provider._chat_breaker.record_success()
-        return _parse_rewrite_lines(text)
-    except Exception as exc:
-        provider._chat_breaker.record_failure()
-        logger.warning("Query rewrite LLM failed, using original only: %s", exc)
-        return []
+    return _parse_rewrite_lines(text) if text else []
 
 
 def rewrite(

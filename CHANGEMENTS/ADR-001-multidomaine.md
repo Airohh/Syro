@@ -1,6 +1,6 @@
 # ADR-001 — Modèle multi-domaines
 
-- **Statut** : Accepted (2026-06-28) — *ticket T0.4*
+- **Statut** : Accepted (2026-06-28) — *ticket T0.4* · isolation « une collection par domaine » remplacée par **ADR-002** (filtre de payload)
 - **Date** : 2026-06-28
 - **Décideurs** : TL · **Consultés** : BE, FE
 - **Lié** : `ROADMAP_RAG.md` (E4), `docs/architecture.md`

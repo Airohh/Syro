@@ -9,16 +9,26 @@ from typing import Any
 import tiktoken
 
 
-@lru_cache(maxsize=8)
-def _get_encoding(model: str):
-    return tiktoken.encoding_for_model(model)
-
-
-def count_tokens(text: str, model: str = "gpt-4") -> int:
+@lru_cache(maxsize=1)
+def _get_encoding():
+    """Tokenizer cl100k (tiktoken). None si indisponible (hors-ligne sans cache) :
+    l'échec est mémorisé pour ne pas retenter un téléchargement à chaque appel."""
     try:
-        return len(_get_encoding(model).encode(text))
+        return tiktoken.get_encoding("cl100k_base")
     except Exception:
-        return len(text) // 4
+        return None
+
+
+def _estimate_tokens(text: str) -> int:
+    # Repli prudent (~3 caractères/token en français) : surestime plutôt que l'inverse.
+    return max(1, len(text) // 3)
+
+
+def count_tokens(text: str) -> int:
+    encoding = _get_encoding()
+    if encoding is None:
+        return _estimate_tokens(text)
+    return len(encoding.encode_ordinary(text))
 
 
 def chunk_text_hierarchical(
@@ -72,10 +82,14 @@ def chunk_text_hierarchical(
                     current_level = section_level
                 else:
                     sub_chunks = _split_large_section(section_text, chunk_size, overlap)
-                    for sub_chunk in sub_chunks:
+                    for i, sub_chunk in enumerate(sub_chunks):
+                        text = sub_chunk.strip()
+                        if i > 0 and section_header:
+                            # Suite d'une longue section : on rappelle son titre.
+                            text = f"{section_header} (suite)\n{text}"
                         chunks.append(
                             {
-                                "text": sub_chunk.strip(),
+                                "text": text,
                                 "index": chunk_index,
                                 "header": section_header,
                                 "level": section_level,
@@ -115,14 +129,21 @@ def _split_by_headers(text: str) -> list[dict[str, Any]]:
 
     def flush() -> None:
         body = "\n".join(buffer)
-        if body.strip():
+        content = (
+            buffer[1:]
+            if header and buffer and buffer[0].lstrip().startswith("#")
+            else buffer
+        )
+        if "\n".join(content).strip():
             sections.append({"text": body, "header": header, "level": level})
 
     for line in lines:
+        # La ligne de titre est gardée dans la section : le titre fait partie
+        # du texte embeddé et indexé BM25 (contexte « de quoi parle ce chunk »).
         md_match = re.match(markdown_pattern, line.strip())
         if md_match:
             flush()
-            buffer = []
+            buffer = [line]
             level = len(md_match.group(1))
             header = md_match.group(2).strip()
             continue
@@ -130,7 +151,9 @@ def _split_by_headers(text: str) -> list[dict[str, Any]]:
         html_match = re.search(html_pattern, line, re.IGNORECASE)
         if html_match:
             flush()
-            buffer = []
+            buffer = [
+                f"{'#' * int(html_match.group(1)[1])} {html_match.group(2).strip()}"
+            ]
             level = int(html_match.group(1)[1])  # h1 -> 1, h2 -> 2, etc.
             header = html_match.group(2).strip()
             continue
@@ -201,51 +224,52 @@ def _split_large_section(text: str, chunk_size: int, overlap: int) -> list[str]:
                 else:
                     chunks.extend(_split_markdown_table(block, chunk_size))
             else:
-                chunks.extend(_split_large_section_words(block, chunk_size, overlap))
+                chunks.extend(_split_by_tokens(block, chunk_size, overlap))
         return chunks or [text]
-    return _split_large_section_words(text, chunk_size, overlap)
+    return _split_by_tokens(text, chunk_size, overlap)
 
 
-def _split_large_section_words(text: str, chunk_size: int, overlap: int) -> list[str]:
+def _split_by_tokens(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """Fenêtres glissantes de `chunk_size` tokens (overlap en tokens).
+
+    On découpe sur les mots (jamais au milieu d'un mot) mais on compte en
+    tokens, pour que la taille réelle respecte la limite du reranker
+    (512 tokens question + passage) et du modèle d'embedding.
+    """
     words = text.split()
+    if not words:
+        return []
+    encoding = _get_encoding()
+    if encoding is None:
+        word_tokens = [_estimate_tokens(f" {w}") for w in words]
+    else:
+        word_tokens = [
+            len(t) for t in encoding.encode_ordinary_batch([f" {w}" for w in words])
+        ]
+
     chunks: list[str] = []
     start = 0
-
     while start < len(words):
-        end = min(len(words), start + chunk_size)
-        chunk_text = " ".join(words[start:end])
-        chunks.append(chunk_text)
+        end, total = start, 0
+        while end < len(words) and (
+            total + word_tokens[end] <= chunk_size or end == start
+        ):
+            total += word_tokens[end]
+            end += 1
+        chunks.append(" ".join(words[start:end]))
         if end >= len(words):
             break
-        start = end - overlap
-        if start < 0:
-            start = 0
-
+        # Recul de `overlap` tokens pour le chevauchement (au moins 1 mot d'avance).
+        back, new_start = 0, end
+        while new_start - 1 > start and back + word_tokens[new_start - 1] <= overlap:
+            new_start -= 1
+            back += word_tokens[new_start]
+        start = new_start
     return chunks
 
 
 def _chunk_simple(text: str, chunk_size: int, overlap: int) -> list[dict[str, Any]]:
-    words = text.split()
-    chunks: list[dict[str, Any]] = []
-    start = 0
-    index = 0
-
-    while start < len(words):
-        end = min(len(words), start + chunk_size)
-        chunk_text = " ".join(words[start:end])
-        chunks.append(
-            {
-                "text": chunk_text,
-                "index": index,
-                "header": "",
-                "level": 0,
-            }
-        )
-        index += 1
-        if end >= len(words):
-            break
-        start = end - overlap
-        if start < 0:
-            start = 0
-
-    return chunks
+    return [
+        {"text": chunk, "index": i, "header": "", "level": 0}
+        for i, chunk in enumerate(_split_by_tokens(text, chunk_size, overlap))
+    ]

@@ -112,6 +112,17 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               {loading ? 'Connexion...' : 'Se connecter'}
             </button>
           </form>
+
+          <button
+            type="button"
+            onClick={() => {
+              setUsername('demo@syro.local');
+              setPassword('syro-demo');
+            }}
+            className="w-full mt-3 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Utiliser le compte de démo (demo@syro.local)
+          </button>
         </div>
 
         <p className="text-center text-xs text-zinc-600 mt-5">

@@ -1,83 +1,87 @@
 # Architecture Syro — état actuel
 
-> **Statut** : description de l'état réel du code (pas un backlog).
-> Plan d'exécution vivant : **[`CHANGEMENTS/ROADMAP_RAG.md`](../CHANGEMENTS/ROADMAP_RAG.md)**
-
----
+> Description de ce que fait **réellement** le code (pas un backlog).
+> Historique : [`CHANGEMENTS/CHANGEMENTS.md`](../CHANGEMENTS/CHANGEMENTS.md) · Décisions : `CHANGEMENTS/ADR-*.md`
 
 ## Vue d'ensemble
 
-Syro est un RAG hybride multi-domaines : FastAPI + Qdrant (dense) + BM25
-(sparse), fusion RRF, reranking cross-encoder, ingestion async Celery,
-observabilité Prometheus/OpenTelemetry/Langfuse (opt-in), éval RAGAS + golden set 100 paires.
-
-```
-Question
-   │
-   ▼
-┌──────────────────┐   mots-clés (domain_detector.py) ou route /domains/{domain}/chat
-│  Domain routing  │   ADR-001 : mono-API, 1 base URL (VITE_API_URL)
-└────────┬─────────┘
-         │
-   ┌─────┴──────────────────────────────────────┐
-   │  Query understanding (opt-in, flags)      │
-   │  rewriting · HyDE · décomposition · CRAG   │
-   └────────┬─────────────────────────────────┘
-         │
-   ┌─────┴─────┐  recherche parallèle
-   ▼           ▼
-┌──────┐   ┌──────┐
-│Vector│   │ BM25 │   embedding KO → dégradation BM25-only
-│Qdrant│   │      │
-└──┬───┘   └──┬───┘
-   └────┬─────┘
-        ▼
-┌───────────────┐   Reciprocal Rank Fusion (rrf_k=60)
-│  RRF fusion   │   hybrid_search_alpha déprécié (ignoré)
-└───────┬───────┘
-        ▼
-┌───────────────┐   bge-reranker-v2-m3 (opt-in via enable_reranking)
-│  Cross-encoder│
-└───────┬───────┘
-        ▼
-┌───────────────┐   Self-RAG filter (opt-in) + historique conversation (T2.5)
-│  LLM answer   │   cache sémantique retrieval (opt-in, T4.5)
-└───────────────┘
+```mermaid
+flowchart TB
+    subgraph Ingestion
+        UP[Upload API] --> Q[(Redis)] --> W[Worker Celery]
+        W --> EX[Extraction<br/>PDF / DOCX / TXT / MD / CSV]
+        EX --> CL[Domaine<br/>fourni ou détecté]
+        CL --> CH[Chunks 400 tokens<br/>+ titre de section]
+        CH --> EM[Embeddings<br/>search_document:]
+        EM --> TX{{Transaction}}
+        TX --> SQL[(SQLite<br/>documents, doc_chunks)]
+        TX --> QD[(Qdrant<br/>1 collection)]
+    end
+    subgraph Question
+        QU[Question] --> PERM[Documents autorisés]
+        PERM --> DENSE[Dense top 20<br/>search_query:]
+        PERM --> BM[BM25 top 20]
+        DENSE --> RRF[RRF k=60]
+        BM --> RRF
+        RRF --> CE[Cross-encoder<br/>sigmoïde ≥ seuil]
+        CE -->|chunks| LLM[LLM + sources numérotées]
+        CE -->|aucun| NF[« Je ne trouve pas »]
+    end
+    QD -.-> DENSE
+    SQL -.-> BM
 ```
 
-## État par capacité
+## Modèle de données du retrieval
 
-Échelle : 🟢 au niveau de l'état de l'art · 🟡 fait avec dette · 🔴 absent.
+| Donnée | Où | Rôle |
+|---|---|---|
+| `documents.domain` | SQLite | **Source unique** du domaine d'un document (fourni à l'upload ou détecté à l'ingestion) |
+| `doc_chunks(id, document_id, text)` | SQLite | Texte des chunks, index BM25 ; `id` = id du point Qdrant |
+| Point Qdrant `{organization_id, document_id, domain, filename, header, chunk_index, text}` | Collection `syro_chunks` | Recherche dense ; les 3 premiers champs sont indexés |
+| `conversations.user_id` | SQLite | Propriétaire : contrôle d'accès à l'historique |
 
-| Capacité | État | Où / Note |
-|----------|------|-----------|
-| Détection de domaine | 🟢 | `domain_detector.py` — mots-clés (pas de modèle ML) |
-| Recherche multi-domaines | 🟢 | `multi_domain_rag.py`, `chat.py` |
-| Fusion résultats | 🟢 | RRF dans `hybrid_search.py` |
-| Reranking | 🟢 | `bge-reranker-v2-m3`, blend RRF × `rerank_weight` |
-| Query rewriting | 🟡 | `query_rewriter.py` — **off par défaut** (`enable_query_rewriting`) |
-| HyDE | 🟡 | `hyde.py` — **off par défaut** |
-| CRAG / Self-RAG / décomposition | 🟡 | `crag.py`, `self_rag.py`, `decompose.py` — **off par défaut** |
-| Historique conversationnel | 🟢 | `load_conversation_history` → retrieval + prompt LLM (T2.5) |
-| Cache sémantique retrieval | 🟡 | `semantic_cache.py` — **off par défaut** |
-| Tracing RAG (Langfuse) | 🟡 | `langfuse_tracer.py` — **off par défaut**, profil Docker optionnel |
-| Golden set + gates CI | 🟡 | 100 paires, gate intégrité en CI ; gate retrieval = stack live |
-| Éval retrieval vs génération | 🟢 | `metrics.py` + `evaluate.py` ; `--retrieval-only` sans LLM |
-| Modèle multi-domaines | 🟢 | ADR-001 Accepted : mono-API |
-| Persistance métadonnées | 🟡 | SQLite (`db.py`) ; Postgres dans compose **commenté** (non branché) |
-| BM25 | 🟡 | In-memory par processus ; fingerprint SQL pour invalidation cross-worker |
-| Ingestion multimodale | 🔴 | Texte seul ; tableaux/images DOCX non extraits |
-| Config domaines par org | 🔴 | Domaine = config globale + détection |
+Un domaine n'est **pas** une collection : c'est un filtre (voir ADR-002). `domain` absent ou `general` = aucun filtre.
+
+## Étapes et fichiers
+
+| Étape | Fichier | Détail |
+|---|---|---|
+| Upload | `routers/documents.py` | Formats supportés uniquement, commit puis file Celery (repli : tâche de fond) |
+| Ingestion | `services/ingestion.py`, `services/rag.py` | Embeddings calculés **avant** la transaction ; en cas d'échec Qdrant, rollback SQLite → statut `failed`, retry Celery |
+| Chunking | `services/chunker.py` | Sections par titres, fenêtres de tokens avec recouvrement, tableaux Markdown préservés |
+| Permissions | `services/retrieval_filters.py` | Ids de documents autorisés, passés à Qdrant **et** à BM25 |
+| Dense | `services/vector_store.py` | `query_points` + filtre payload |
+| Lexical | `services/bm25_search.py` | Minuscules, sans accents, sans mots vides ; index par organisation, invalidé par empreinte SQL |
+| Fusion | `services/hybrid_search.py` | `fuse_rrf` (rangs à partir de 1), 20 candidats |
+| Reranking | `services/reranker.py` | Probabilité sigmoïde, tri, seuil `RERANK_MIN_SCORE` ; sans modèle → ordre RRF |
+| Génération | `services/llm.py`, `services/chat.py` | Règles RAG communes + persona du domaine, `<sources>` avant la question, historique en vrais tours |
+
+## Couches optionnelles (off par défaut)
+
+| Flag | Effet |
+|---|---|
+| `ENABLE_QUERY_REWRITING` | 1–2 reformulations LLM = listes supplémentaires dans la RRF (rend autonomes les questions de suivi) |
+| `ENABLE_HYDE` | Vecteur d'un passage hypothétique généré par le LLM |
+| `ENABLE_CRAG` | Si la pertinence (overlap lexical + score du reranker) est faible → 2e passe élargie avec reformulations |
+| `ENABLE_SELF_RAG` | Filtre les chunks peu pertinents avant le prompt |
+| `ENABLE_QUERY_DECOMPOSITION` | Questions composées → sous-requêtes parallèles, fusion RRF, rerank sur la question d'origine |
+| `ENABLE_SEMANTIC_CACHE` | Cache du retrieval par similarité, clé incluant permissions, filtres, historique et **empreinte du contenu** (pas de résultat périmé après une ingestion faite par le worker) |
+
+## Robustesse
+
+- Embeddings indisponibles → recherche **BM25 seule** ; Qdrant indisponible → idem.
+- LLM indisponible → `503` explicite (circuit breaker : échec immédiat pendant 30 s après 5 échecs).
+- Aucun chunk pertinent → réponse d'abstention, sans appel au LLM.
+
+## Observabilité
+
+Prometheus (`/metrics`), MLflow (requêtes et ingestions), Langfuse optionnel (`infra/docker-compose.langfuse.yml`), logs JSON avec correlation id, `/health/ready`.
 
 ## Évaluation
 
 | Commande | Rôle |
-|----------|------|
-| `make eval-gate` | Intégrité golden set (CI, sans stack) |
-| `make eval-retrieval` | Retrieval live → `report.json` (Qdrant + embeddings) |
-| `make eval-retrieval-gate` | Seuils sur `report.json` |
-| `make eval` | RAGAS complet (LLM judge) |
-
----
-
-Détail tickets et sprints : **[`CHANGEMENTS/ROADMAP_RAG.md`](../CHANGEMENTS/ROADMAP_RAG.md)**
+|---|---|
+| `make test` | Dont BM25 réel sur le corpus + golden set (`test_retrieval_corpus.py`) et parcours API complet (`test_end_to_end.py`) |
+| `make eval-gate` | Intégrité du golden set |
+| `make eval-retrieval` | Recall/nDCG/MRR/refus hors corpus sur la stack live |
+| `make eval` | + RAGAS |

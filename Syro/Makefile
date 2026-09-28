@@ -1,123 +1,61 @@
-# Makefile pour Syro - Commandes courantes
-
-.PHONY: help up down logs build clean test test-cov lint format release
+# Syro — raccourcis. Sans make : les commandes docker compose sont dans le README.
+.DEFAULT_GOAL := help
+.PHONY: help up demo down logs ps restart clean dev test lint format eval-gate eval eval-retrieval reindex
 
 help: ## Afficher cette aide
-	@echo "Commandes disponibles:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-up: ## Démarrer tous les services (profil local-llm par défaut)
-	docker compose -f infra/docker-compose.yml -f infra/docker-compose.local-llm.yml up -d
+# --- Utilisation -----------------------------------------------------------
+up: ## Démarrer toute la stack (UI :5173, API :8000)
+	docker compose up -d --build
+	@echo "UI  : http://localhost:5173  (demo@syro.local / syro-demo)"
+	@echo "API : http://localhost:8000/docs"
 
-up-openai: ## Démarrer avec OpenAI (nécessite OPENAI_API_KEY dans .env)
-	docker compose -f infra/docker-compose.yml -f infra/docker-compose.openai.yml up -d
+demo: ## Charger les 19 documents de démo (à lancer après `make up`)
+	docker compose exec syro-api python scripts/load_demo.py
 
-down: ## Arrêter tous les services
-	docker compose -f infra/docker-compose.yml down
+down: ## Arrêter la stack (les données sont conservées)
+	docker compose down
 
-logs: ## Voir les logs de tous les services
-	docker compose -f infra/docker-compose.yml logs -f
+logs: ## Suivre les logs de l'API et du worker
+	docker compose logs -f syro-api syro-worker
 
-logs-api: ## Voir les logs de l'API uniquement
-	docker compose -f infra/docker-compose.yml logs -f syro-api
+ps: ## État des conteneurs
+	docker compose ps
 
-logs-frontend: ## Voir les logs du frontend uniquement
-	docker compose -f infra/docker-compose.yml logs -f syro-frontend
+restart: ## Redémarrer l'API et le worker
+	docker compose restart syro-api syro-worker
 
-build: ## Rebuild toutes les images
-	docker compose -f infra/docker-compose.yml build --no-cache
+reindex: ## Réindexer tous les documents (après changement de modèle d'embedding)
+	docker compose exec syro-api python scripts/reindex.py
 
-build-api: ## Rebuild uniquement l'image API
-	docker compose -f infra/docker-compose.yml build --no-cache syro-api
+clean: ## Tout supprimer, données comprises (demande confirmation)
+	@read -p "Supprimer TOUTES les données (documents, index, modèles) ? [y/N] " a && [ "$$a" = y ]
+	docker compose down -v
 
-build-frontend: ## Rebuild uniquement l'image frontend
-	docker compose -f infra/docker-compose.yml build --no-cache syro-frontend
+# --- Développement ---------------------------------------------------------
+dev: ## API en local (hot reload) avec Qdrant + Redis + Ollama en Docker
+	docker compose up -d qdrant redis ollama ollama-init
+	uvicorn app.main:app --reload --port 8000
 
-clean: ## Nettoyer volumes et images (ATTENTION: supprime les données)
-	docker compose -f infra/docker-compose.yml down -v
-	docker rmi syro-api syro-frontend 2>/dev/null || true
-
-test: ## Lancer la suite lean (smoke + non-régression)
+test: ## Tests (sans service externe)
 	pytest
 
-test-cov: ## Suite lean avec coverage
-	pytest --cov=app --cov=worker --cov-report=term-missing
+lint: ## Ruff + Black (comme la CI)
+	ruff check app worker scripts
+	black --check app worker scripts
 
-smoke: ## Smoke test post-deploiement (API + Qdrant + Redis + MLflow)
-	python scripts/smoke_test.py
+format: ## Formater le code
+	black app worker scripts
+	ruff check app worker scripts --fix
 
-eval: ## Evaluation RAGAS reproductible (necessite OPENAI_API_KEY ou USE_OLLAMA=true)
-	python evaluation/evaluate.py
-
-eval-retrieval: ## Retrieval live uniquement (pas de LLM) → report.json
-	python evaluation/evaluate.py --retrieval-only
-
-eval-gate: ## Gate d'integrite du golden set (deterministe, sans LLM)
+# --- Évaluation ------------------------------------------------------------
+eval-gate: ## Intégrité du golden set (sans service)
 	python evaluation/validate_golden_set.py
 
-eval-retrieval-gate: ## Gate seuils retrieval sur report.json (apres make eval)
-	python evaluation/validate_retrieval_thresholds.py --skip-missing
+eval-retrieval: ## Métriques retrieval live (Recall/nDCG/MRR) → evaluation/report.json
+	docker compose exec syro-api python evaluation/ingest_corpus.py
+	docker compose exec syro-api python evaluation/evaluate.py --retrieval-only
 
-tune: ## Grid-search rrf_k sur golden set (stack + corpus requis)
-	python evaluation/tune.py
-
-benchmark: ## Benchmark latence p50/p95/p99 (retrieval vs end-to-end, stack requis)
-	python evaluation/benchmark.py --repeats 5
-
-lint: ## Lancer le linting (ruff)
-	ruff check app worker
-	ruff format --check app worker
-
-format: ## Formater le code (ruff)
-	ruff format app worker
-
-version: ## Afficher la version actuelle
-	@python scripts/version.py get
-
-version-bump-patch: ## Incrémenter la version patch (1.2.3 -> 1.2.4)
-	@python scripts/version.py bump patch
-
-version-bump-minor: ## Incrémenter la version minor (1.2.3 -> 1.3.0)
-	@python scripts/version.py bump minor
-
-version-bump-major: ## Incrémenter la version major (1.2.3 -> 2.0.0)
-	@python scripts/version.py bump major
-
-release: ## Créer une release (nécessite VERSION=1.2.3 ou utilise version actuelle)
-	@if [ -z "$(VERSION)" ]; then \
-		VERSION=$$(python scripts/version.py get); \
-		echo "Utilisation de la version actuelle: $$VERSION"; \
-	else \
-		python scripts/version.py set $(VERSION); \
-	fi
-	@VERSION=$$(python scripts/version.py get); \
-	git add VERSION CHANGELOG.md; \
-	git commit -m "chore: bump version to $$VERSION" || true; \
-	git tag -a "v$$VERSION" -m "Release v$$VERSION"; \
-	git push origin main --tags; \
-	echo "Release v$$VERSION créée. GitHub Actions va créer la release automatiquement."
-
-ps: ## Voir l'état des conteneurs
-	docker compose -f infra/docker-compose.yml ps
-
-restart: ## Redémarrer tous les services
-	docker compose -f infra/docker-compose.yml restart
-
-restart-api: ## Redémarrer uniquement l'API
-	docker compose -f infra/docker-compose.yml restart syro-api
-
-shell-api: ## Ouvrir un shell dans le conteneur API
-	docker compose -f infra/docker-compose.yml exec syro-api /bin/bash
-
-shell-postgres: ## Ouvrir un shell PostgreSQL
-	docker compose -f infra/docker-compose.yml exec postgres psql -U syro -d syro
-
-logs-worker: ## Voir les logs du worker uniquement
-	docker compose -f infra/docker-compose.yml logs -f syro-worker
-
-restart-worker: ## Redémarrer uniquement le worker
-	docker compose -f infra/docker-compose.yml restart syro-worker
-
-shell-worker: ## Ouvrir un shell dans le conteneur worker
-	docker compose -f infra/docker-compose.yml exec syro-worker /bin/bash
-
+eval: ## Évaluation complète RAGAS (LLM juge, pip install -r evaluation/requirements-eval.txt)
+	python evaluation/evaluate.py

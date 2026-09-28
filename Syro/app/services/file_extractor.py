@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import io
 import logging
@@ -105,18 +105,29 @@ def _extract_docx(content: bytes) -> str:
     return "\n\n".join(parts)
 
 
+# Formats réellement extraits (texte, PDF avec tableaux, DOCX avec tableaux).
+SUPPORTED_EXTENSIONS = {".txt", ".md", ".markdown", ".csv", ".pdf", ".docx"}
+
+
+def is_supported(filename: str) -> bool:
+    return Path(filename).suffix.lower() in SUPPORTED_EXTENSIONS
+
+
 def extract_text_from_bytes(
     content: bytes, filename: str, content_type: Optional[str]
 ) -> str:
     ext = Path(filename).suffix.lower()
-    if content_type in TEXT_TYPES or ext in {".txt", ".md", ".csv"}:
+    if content_type in TEXT_TYPES or ext in {".txt", ".md", ".markdown", ".csv"}:
         return content.decode("utf-8", errors="ignore")
     if content_type == "application/pdf" or ext == ".pdf":
         return _extract_pdf(content)
-    if content_type in {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
-    } or ext in {".docx", ".doc"}:
+    if (
+        content_type
+        in {
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }
+        or ext == ".docx"
+    ):
         return _extract_docx(content)
     return content.decode("utf-8", errors="ignore")
 

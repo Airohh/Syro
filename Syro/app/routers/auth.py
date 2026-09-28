@@ -1,10 +1,10 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 import sqlite3
 
 from ..db import get_db
 from ..schemas import Token
-from ..security import verify_password, create_access_token
+from ..auth import create_access_token, verify_password
 from ..security.rate_limiter import auth_rate_limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])

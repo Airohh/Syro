@@ -1,5 +1,5 @@
 import { Message, Source } from '../services/api';
-import { User, Copy, Check, ChevronDown, ChevronUp, ExternalLink, FileText } from 'lucide-react';
+import { User, Copy, Check, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { useState } from 'react';
 import DOMPurify from 'dompurify';
 import { getDomainConfig } from '../utils/domainConfig';
@@ -157,23 +157,23 @@ export default function ChatBubble({ message, domainId = 'general' }: ChatBubble
                   hover:bg-zinc-800/60 hover:border-white/8 transition-all duration-150"
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="font-medium text-zinc-400">Source {index + 1}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-600 font-mono">
-                      {(source.score * 100).toFixed(0)}%
-                    </span>
-                    {source.metadata?.url && (
-                      <a
-                        href={source.metadata.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label="Ouvrir la source"
-                        className="text-zinc-600 hover:text-blue-400 transition-colors cursor-pointer"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                  <span className="font-medium text-zinc-400 truncate">
+                    Source {source.metadata?.source ?? index + 1}
+                    {source.metadata?.filename && (
+                      <span className="text-zinc-500 font-normal"> · {source.metadata.filename}</span>
                     )}
-                  </div>
+                    {source.metadata?.header && (
+                      <span className="text-zinc-600 font-normal"> › {source.metadata.header}</span>
+                    )}
+                  </span>
+                  {source.metadata?.rerank_score != null && (
+                    <span
+                      className="text-zinc-600 font-mono shrink-0"
+                      title="Pertinence estimée par le cross-encoder"
+                    >
+                      {(source.metadata.rerank_score * 100).toFixed(0)}%
+                    </span>
+                  )}
                 </div>
                 <p className="text-zinc-500 line-clamp-2 leading-relaxed">
                   {source.text}

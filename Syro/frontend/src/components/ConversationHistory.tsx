@@ -5,7 +5,7 @@ import { Conversation } from '../hooks/useLocalConversations';
 
 interface ConversationHistoryProps {
   conversations: Conversation[];
-  onSelect: (messages: Message[], conversationId: string) => void;
+  onSelect: (messages: Message[], conversationId: string, serverId?: number) => void;
   onDelete: (id: string) => void;
   onNewConversation: () => void;
 }
@@ -20,7 +20,7 @@ export default function ConversationHistory({
 
   const handleSelect = (conv: Conversation) => {
     setSelectedId(conv.id);
-    onSelect(conv.messages, conv.id);
+    onSelect(conv.messages, conv.id, conv.serverId);
   };
 
   const handleDelete = (id: string, e: React.MouseEvent) => {

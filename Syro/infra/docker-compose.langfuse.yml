@@ -1,5 +1,6 @@
 # Langfuse self-hosted (T1.3) — profil optionnel
-# Usage: docker compose -f infra/docker-compose.yml -f infra/docker-compose.langfuse.yml --profile langfuse up -d
+# Usage (depuis Syro/) :
+#   docker compose -f docker-compose.yml -f infra/docker-compose.langfuse.yml --profile langfuse up -d
 #
 # Puis créer un projet dans Langfuse UI (http://localhost:3000) et renseigner :
 #   LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY dans .env
@@ -16,8 +17,6 @@ services:
       POSTGRES_DB: langfuse
     volumes:
       - langfuse_db:/var/lib/postgresql/data
-    networks:
-      - syro-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U langfuse"]
       interval: 5s
@@ -38,8 +37,6 @@ services:
     depends_on:
       langfuse-db:
         condition: service_healthy
-    networks:
-      - syro-network
 
   syro-api:
     environment:

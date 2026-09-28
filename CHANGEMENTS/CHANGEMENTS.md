@@ -3,7 +3,41 @@
 > **Documents de ce dossier**
 > - **`ROADMAP_RAG.md`** — 📌 **Plan d'exécution team-ready** (diagnostic, archi cible, RACI, ways of working, 25 tickets, plan de sprints, chemin critique, risques, KPI, board de suivi). Document de référence pour piloter le travail.
 > - `CHANGEMENTS.md` (ce fichier) — journal des changements de code par session.
-> - `ADR-001-multidomaine.md` — décision d'architecture multi-domaines (ticket T0.4, statut **Proposed** — à valider TL).
+> - `ADR-001-multidomaine.md` — mono-API multi-domaines (Accepted).
+> - `ADR-002-collection-unique.md` — une collection Qdrant, le domaine comme filtre (Accepted).
+
+---
+
+## Session 2026-09-28 — Audit + remise à plat
+
+Audit complet puis corrections. Objectif : un projet cohérent, simple à lancer et à présenter.
+
+### Bugs corrigés (vérifiés par reproduction)
+- **BM25 vide dès qu'un domaine était demandé** : il lisait le 1er tag (`"domain:tech"`, `"python"`) comme domaine → 0 résultat sur les 100 questions du golden set. Domaine désormais dans `documents.domain` (ADR-002).
+- **Métriques de retrieval toujours à 0** : `evaluate.py` attendait des `chunk_id` au format `org_doc_chunk` alors que ce sont des entiers. Le mapping passe maintenant par `metadata.filename`.
+- **Reranker** : le score RRF (~0,03) était mélangé à un score reranker normalisé min-max, qui vaut 1,0 même hors sujet. Désormais : sigmoïde, tri par cross-encoder, seuil d'abstention. CRAG et Self-RAG lisent une pertinence unifiée.
+- **Ingestion « complete » sans vecteurs** si Qdrant échouait : l'ingestion est maintenant transactionnelle, avec statut `failed` et retry Celery.
+- **Frontend** : le domaine sélectionné n'était jamais envoyé, et l'id local de conversation (UUID) était envoyé à l'API.
+
+### Sécurité
+- Conversations vérifiées (organisation + propriétaire) : on ne pouvait plus lire l'historique d'une autre organisation via `conversation_id`.
+- `/admin` borné à l'organisation de l'appelant, sans escalade de rôle.
+- Secret JWT généré et persisté s'il n'est pas fourni ; `debug` désactivé par défaut ; compte démo configurable.
+
+### Qualité du retrieval
+- Préfixes `search_query:` / `search_document:` pour nomic-embed-text.
+- Chunks découpés en tokens (et non plus en mots), titre de section conservé.
+- 20 candidats par retriever avant rerank ; BM25 sans accents ni mots vides, sans résultats à score nul.
+- Prompt : règles communes, `<sources>` avant la question, noms de fichiers, historique en vrais tours ; abstention sans appel LLM.
+- BM25 seul sur le golden set : nDCG@10 0,887 → 0,909 ; MRR 0,861 → 0,888.
+
+### Simplification
+- Supprimés : agents, recherche multi-domaines « fan-out », mode adaptatif, endpoint `/mlops/benchmark` (il modifiait la config globale), validateur d'upload inutilisé, migrations obsolètes, 4 fichiers compose, 2 Dockerfiles, `worker/config.py`, panneau « 6 backends ».
+- Un seul `docker-compose.yml` (modèles Ollama téléchargés automatiquement), une image backend pour l'API et le worker, `scripts/load_demo.py`, `scripts/reindex.py`, `/health/ready`, `start-syro.ps1` réécrit.
+- Dépendances : `requirements.txt` (exécution) / `requirements-ml.txt` (reranker) / `requirements-dev.txt`.
+
+### Tests
+147 tests (contre 117 avant), dont : BM25 réel sur le corpus, Qdrant en mémoire, isolation des conversations, ingestion transactionnelle, parcours API complet. CI : tests, lint et build du frontend.
 
 ---
 

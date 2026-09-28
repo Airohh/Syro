@@ -13,8 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 from ..config import settings
-from .hybrid_search import hybrid_search
-from .reranker import reranker
+from .hybrid_search import fuse_rrf, hybrid_search, rerank_or_truncate
 
 if TYPE_CHECKING:
     import numpy as np
@@ -44,18 +43,8 @@ def _split_semicolon_clauses(query: str) -> list[str]:
 
 def _llm_decompose(query: str, history: Sequence[str] | None) -> list[str]:
     """Sous-requêtes via LLM (fallback si heuristiques insuffisantes)."""
-    from .llm import provider
-
-    if not provider._chat_model:
-        return []
-
-    try:
-        from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
-    except ImportError:
-        return []
-
-    if not provider._chat_breaker.allow():
-        return []
+    from .llm import complete
+    from .query_rewriter import _parse_rewrite_lines
 
     history_block = ""
     if history:
@@ -63,31 +52,12 @@ def _llm_decompose(query: str, history: Sequence[str] | None) -> list[str]:
         history_block = (
             "Contexte récent:\n" + "\n".join(f"- {h}" for h in recent) + "\n\n"
         )
-
-    system = (
+    text = complete(
         "Tu décomposes une question complexe en 2 à 3 sous-questions autonomes "
-        "pour une recherche documentaire. Une sous-question par ligne, sans numérotation."
+        "pour une recherche documentaire. Une sous-question par ligne, sans numérotation.",
+        f"{history_block}Question: {query}",
     )
-    user = f"{history_block}Question: {query}"
-
-    try:
-        response = provider._chat_model.invoke(
-            [SystemMessage(content=system), HumanMessage(content=user)]
-        )
-        text = (
-            response.content
-            if isinstance(response.content, str)
-            else str(response.content)
-        )
-        provider._chat_breaker.record_success()
-    except Exception as exc:
-        provider._chat_breaker.record_failure()
-        logger.warning("Query decomposition LLM failed: %s", exc)
-        return []
-
-    from .query_rewriter import _parse_rewrite_lines
-
-    return _parse_rewrite_lines(text)
+    return _parse_rewrite_lines(text) if text else []
 
 
 def decompose(query: str, history: Sequence[str] | None = None) -> list[str]:
@@ -118,41 +88,6 @@ def decompose(query: str, history: Sequence[str] | None = None) -> list[str]:
             return deduped[:max_sub]
 
     return [original]
-
-
-def fuse_rrf_lists(
-    result_lists: list[list[dict[str, Any]]],
-    top_k: int,
-) -> list[dict[str, Any]]:
-    """Fusion RRF globale sur plusieurs listes de chunks."""
-    rrf_k = settings.rrf_k
-    chunk_map: dict[str, dict[str, Any]] = {}
-
-    for results in result_lists:
-        for rank, result in enumerate(results):
-            chunk_id = str(result["chunk_id"])
-            entry = chunk_map.get(chunk_id)
-            if entry is None:
-                entry = {
-                    "chunk_id": result["chunk_id"],
-                    "text": result["text"],
-                    "metadata": dict(result.get("metadata") or {}),
-                    "rrf_score": 0.0,
-                }
-                chunk_map[chunk_id] = entry
-            entry["rrf_score"] += 1.0 / (rrf_k + rank)
-
-    fused = [
-        {
-            "chunk_id": e["chunk_id"],
-            "text": e["text"],
-            "score": e["rrf_score"],
-            "metadata": e["metadata"],
-        }
-        for e in chunk_map.values()
-    ]
-    fused.sort(key=lambda x: x["score"], reverse=True)
-    return fused[:top_k]
 
 
 def retrieve_decomposed(
@@ -229,16 +164,8 @@ def retrieve_decomposed(
     with ThreadPoolExecutor(max_workers=min(4, len(subqueries))) as executor:
         result_lists = list(executor.map(_search_one, subqueries))
 
-    fused = fuse_rrf_lists(result_lists, top_k=top_k * 2)
-
-    if settings.enable_reranking and len(fused) > 1:
-        try:
-            reranked = reranker.rerank(query=query, passages=fused, top_k=top_k)
-            for result in reranked:
-                if "final_score" in result:
-                    result["score"] = result["final_score"]
-            return reranked
-        except Exception:
-            return fused[:top_k]
-
-    return fused[:top_k]
+    # Fusion RRF globale des sous-requêtes, puis rerank sur la question d'origine.
+    fused = fuse_rrf([("subquery", results) for results in result_lists])
+    return rerank_or_truncate(
+        query, fused[: max(top_k * 2, settings.retrieval_top_k)], top_k
+    )

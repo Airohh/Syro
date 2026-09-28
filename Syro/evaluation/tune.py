@@ -24,14 +24,12 @@ sys.path.insert(0, str(SYRO_ROOT))
 sys.path.insert(0, str(EVAL_DIR))
 
 from app.config import settings  # noqa: E402
-from app.services.rag import retrieve_chunks_with_metadata  # noqa: E402
 
 import metrics as retrieval_metrics  # noqa: E402
 
 from evaluate import (  # noqa: E402
     DATASET_PATH,
-    ORGANIZATION_ID,
-    _load_doc_filenames,
+    _retrieve,
     _retrieved_doc_ids,
 )
 
@@ -44,12 +42,8 @@ RetrieveFn = Callable[[str, str | None, dict[str, str]], list[str]]
 
 def default_retrieve(question: str, domain: str | None, id_to_name: dict[str, str]) -> list[str]:
     """Retrieval-only : noms de fichiers ordonnés (sans génération LLM)."""
-    results = retrieve_chunks_with_metadata(
-        organization_id=ORGANIZATION_ID,
-        query=question,
-        domain=domain,
-    )
-    return _retrieved_doc_ids(results, id_to_name)
+    del id_to_name  # les chunks portent déjà metadata.filename
+    return _retrieved_doc_ids(_retrieve(question, domain))
 
 
 def collect_retrieval_items(
@@ -116,7 +110,7 @@ def run_grid_search(
     retrieve_fn: RetrieveFn | None = None,
     id_to_name: dict[str, str] | None = None,
 ) -> dict:
-    id_to_name = id_to_name or _load_doc_filenames()
+    id_to_name = id_to_name or {}
 
     def _default(q: str, d: str | None, names: dict[str, str]) -> list[str]:
         return default_retrieve(q, d, names)

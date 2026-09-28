@@ -1,6 +1,6 @@
 """Smoke test post-deploiement : verifie que tous les services repondent.
 
-Usage (apres `docker-compose up -d`):
+Usage (apres `docker compose up -d`):
     python scripts/smoke_test.py
     python scripts/smoke_test.py --api-only   # sans Qdrant/Redis/MLflow
 

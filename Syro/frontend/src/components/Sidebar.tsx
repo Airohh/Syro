@@ -6,14 +6,14 @@ import { getDomainConfig } from '../utils/domainConfig';
 import { getDomainClasses } from '../utils/domainStyles';
 import ConversationHistory from './ConversationHistory';
 import DocumentUpload from './DocumentUpload';
-import BackendStatus from './BackendStatus';
+import ServiceStatus from './ServiceStatus';
 import { Conversation } from '../hooks/useLocalConversations';
 
 interface SidebarProps {
   onLogout: () => void;
   currentDomain?: string;
   onNewConversation?: () => void;
-  onSelectConversation?: (messages: Message[], conversationId: string) => void;
+  onSelectConversation?: (messages: Message[], conversationId: string, serverId?: number) => void;
   conversations?: Conversation[];
   onDeleteConversation?: (id: string) => void;
 }
@@ -105,12 +105,12 @@ export default function Sidebar({
           </div>
         </section>
 
-        {/* Backends */}
+        {/* Services du RAG */}
         <section>
           <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2 px-1 flex items-center gap-1.5">
-            <Wifi className="w-3 h-3" /> Backends
+            <Wifi className="w-3 h-3" /> Services
           </p>
-          <BackendStatus />
+          <ServiceStatus />
         </section>
 
         {/* Conversation history */}

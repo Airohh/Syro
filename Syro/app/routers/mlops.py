@@ -1,18 +1,12 @@
 from __future__ import annotations
 
-import threading
-import time
 
-from fastapi import APIRouter, Body, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
 
 from ..dependencies import get_current_user, require_active_org
 from ..services.mlops_tracker import get_mlops_tracker
 from ..services.mlops_alerts import get_mlops_alerts
-from ..services.chat import build_answer
-from ..config import settings
 
-_benchmark_lock = threading.Lock()
 
 router = APIRouter(prefix="/mlops", tags=["mlops"])
 
@@ -271,126 +265,3 @@ def export_metrics(
 
     # Default: JSON
     return {"format": "json", "data": metrics, "total": len(metrics)}
-
-
-class BenchmarkRequest(BaseModel):
-    queries: list[str]
-    modes: list[str] = ["fast", "quality"]
-    include_sources: bool = False
-
-
-@router.post("/benchmark")
-def run_benchmark(
-    payload: BenchmarkRequest = Body(...),
-    user=Depends(get_current_user),
-    org=Depends(require_active_org()),
-):
-    tracker = get_mlops_tracker()
-    results = {
-        "timestamp": time.time(),
-        "config": {
-            "llm_provider": settings.llm_provider,
-            "chat_model": settings.chat_model,
-            "embeddings_model": settings.embeddings_model,
-            "enable_reranking": settings.enable_reranking,
-            "retrieval_top_k": settings.retrieval_top_k,
-            "rerank_top_k": settings.rerank_top_k,
-            "performance_mode": settings.performance_mode,
-        },
-        "results": [],
-    }
-
-    with _benchmark_lock:
-        original_mode = settings.performance_mode
-        try:
-            for mode in payload.modes:
-                if mode not in ["fast", "quality"]:
-                    continue
-
-                settings.performance_mode = mode
-                settings.apply_performance_mode()
-
-                for query in payload.queries:
-                    try:
-                        start_time = time.time()
-                        answer, usage, sources = build_answer(
-                            organization_id=org["id"],
-                            query=query,
-                            include_sources=payload.include_sources,
-                        )
-                        latency_ms = (time.time() - start_time) * 1000
-
-                        result = {
-                            "query": query,
-                            "mode": mode,
-                            "latency_ms": round(latency_ms, 2),
-                            "token_usage": usage,
-                            "answer_length": len(answer),
-                            "num_sources": (
-                                len(sources) if payload.include_sources else 0
-                            ),
-                            "success": True,
-                        }
-
-                        if tracker.enabled:
-                            avg_score = (
-                                sum(s.get("score", 0.0) for s in sources)
-                                / max(len(sources), 1)
-                                if sources
-                                else 0.0
-                            )
-                            tracker.log_retrieval_experiment(
-                                experiment_name="benchmark",
-                                params={
-                                    "query": query,
-                                    "mode": mode,
-                                    "organization_id": str(org["id"]),
-                                },
-                                metrics={
-                                    "latency_ms": latency_ms,
-                                    "token_usage": usage,
-                                    "num_sources": len(sources),
-                                    "avg_source_score": avg_score,
-                                },
-                                tags={"type": "benchmark", "mode": mode},
-                            )
-
-                        results["results"].append(result)
-                    except Exception as e:
-                        results["results"].append(
-                            {
-                                "query": query,
-                                "mode": mode,
-                                "latency_ms": 0,
-                                "error": str(e),
-                                "success": False,
-                            }
-                        )
-        finally:
-            settings.performance_mode = original_mode
-            settings.apply_performance_mode()
-
-    # Calculate statistics
-    stats = {}
-    for mode in payload.modes:
-        mode_results = [
-            r for r in results["results"] if r.get("mode") == mode and r.get("success")
-        ]
-        if mode_results:
-            latencies = [r["latency_ms"] for r in mode_results]
-            stats[mode] = {
-                "count": len(mode_results),
-                "latency_avg_ms": round(sum(latencies) / len(latencies), 2),
-                "latency_min_ms": round(min(latencies), 2),
-                "latency_max_ms": round(max(latencies), 2),
-                "latency_p50_ms": round(sorted(latencies)[len(latencies) // 2], 2),
-                "latency_p95_ms": (
-                    round(sorted(latencies)[int(len(latencies) * 0.95)], 2)
-                    if len(latencies) > 1
-                    else round(latencies[0], 2)
-                ),
-            }
-
-    results["statistics"] = stats
-
-    return results

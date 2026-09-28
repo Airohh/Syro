@@ -12,18 +12,18 @@ class TestHyde:
         mock_settings.enable_hyde = False
         assert get_hyde_embedding_vector("question") is None
 
-    @patch("app.services.llm.get_embedding_vector")
+    @patch("app.services.llm.get_document_embeddings")
     @patch("app.services.hyde.generate_hypothetical_passage")
     @patch("app.services.hyde.settings")
-    def test_enabled_embeds_passage(self, mock_settings, mock_gen, mock_embed):
+    def test_enabled_embeds_passage_as_document(self, mock_settings, mock_gen, mock_embed):
         mock_settings.enable_hyde = True
         mock_gen.return_value = "passage hypothétique sur le RAG"
-        mock_embed.return_value = np.array([0.1, 0.2], dtype=np.float32)
+        mock_embed.return_value = [np.array([0.1, 0.2], dtype=np.float32)]
 
         vec = get_hyde_embedding_vector("Qu'est-ce que le RAG ?")
 
         assert vec is not None
-        mock_embed.assert_called_once_with("passage hypothétique sur le RAG")
+        mock_embed.assert_called_once_with(["passage hypothétique sur le RAG"])
 
     @patch("app.services.hyde.generate_hypothetical_passage")
     @patch("app.services.hyde.settings")
@@ -33,8 +33,10 @@ class TestHyde:
         assert get_hyde_embedding_vector("q") is None
 
     @patch("app.services.llm.provider")
-    def test_generate_returns_empty_without_chat_model(self, mock_provider):
-        mock_provider._chat_model = None
+    def test_generate_returns_empty_when_llm_down(self, mock_provider):
+        from app.services.llm import LLMUnavailableError
+
+        mock_provider.invoke.side_effect = LLMUnavailableError("down")
         assert generate_hypothetical_passage("q") == ""
 
 
