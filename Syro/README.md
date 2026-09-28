@@ -1,371 +1,96 @@
-# Syro — Multi-Domain RAG Platform
+# Syro — référence technique
 
-> Production-grade Retrieval-Augmented Generation platform with hybrid search, cross-encoder reranking, multi-domain routing, async ingestion, and full MLOps observability.
+Présentation, démarrage et scénario de démo : [README principal](../README.md).
+Cette page sert au développement : API, configuration, commandes.
 
----
-
-## Overview
-
-Syro is a multi-tenant RAG API that lets organizations upload documents and query them with an LLM grounded strictly in their own knowledge base. It supports **7 independent domains** (Tech, Medical, Legal, Finance, Education, MLOps, General), each with domain-specific system prompts, isolated Qdrant collections, and fine-tuned retrieval parameters.
-
-```
-User query
-    │
-    ▼
-Domain Router ──────────────────────────────────────────────────┐
-    │                                                            │
-    ▼                                                            │
-BM25 Search ──┐                                                  │
-              ├──► Score fusion (α·vector + (1-α)·BM25)         │
-Vector Search ┘         │                                        │
-    (Qdrant)            ▼                                        │
-                   BGE Reranker                                  │
-                (cross-encoder v2-m3)                            │
-                        │                                        │
-                        ▼                                        │
-                  Top-K chunks ──► LLM (Ollama / OpenAI) ◄──────┘
-                                        │
-                                        ▼
-                              Answer + cited sources
-```
-
----
-
-## Stack
-
-| Layer | Technology |
-|-------|------------|
-| **API** | FastAPI 0.111, Pydantic v2, Uvicorn |
-| **Auth** | JWT (PyJWT), bcrypt (passlib) |
-| **Database** | SQLite (WAL mode, foreign keys) |
-| **Vector DB** | Qdrant (per-domain collections, HNSW) |
-| **Lexical search** | rank-bm25 (in-memory, per-org) |
-| **Reranker** | BAAI/bge-reranker-v2-m3 (FlagEmbedding) |
-| **Embeddings** | nomic-embed-text via Ollama / OpenAI |
-| **LLM** | Ollama (llama3.2) or OpenAI (gpt-4o-mini) |
-| **Async ingestion** | Celery + Redis |
-| **MLOps** | MLflow experiment tracking + custom alerting |
-| **Observability** | Prometheus metrics, OpenTelemetry tracing, structured JSON logs |
-| **Frontend** | React + TypeScript + Vite |
-| **Infra** | Docker Compose (API, Worker, Qdrant, Redis, MLflow) |
-| **Evaluation** | RAGAS (faithfulness, answer relevancy, context recall, context precision) |
-
----
-
-## Features
-
-- **Hybrid search** — Reciprocal Rank Fusion (RRF) of dense (Qdrant cosine) and sparse (BM25) retrieval
-- **Cross-encoder reranking** — BGE-reranker-v2-m3, GPU/CPU auto-detection, combined score weighting
-- **Multi-domain routing** — 7 domains with isolated vector collections and system prompts; auto-detection via ML classifier
-- **Adaptive performance** — automatic fast/quality mode switching based on rolling latency window
-- **Multi-tenant** — organization-scoped data, per-role permissions, document access levels, share links
-- **Async ingestion** — Celery workers process uploads (chunking → embedding → indexing) without blocking the API
-- **Streaming responses** — SSE streaming with citation sources
-- **RAGAS evaluation** — reproducible benchmark on 20 Q/A pairs across Tech and MLOps domains
-- **MLOps** — MLflow experiment tracking, alerting thresholds, benchmark endpoint
-- **Security** — rate limiting (Redis or in-memory), CORS, security headers, file validation (MIME + size), HTTPS-ready
-- **Resilience** — LLM timeouts + retries, circuit breaker (fail-fast when the backend is down), graceful degradation to BM25-only search if embeddings are unavailable
-
----
-
-## Domains
-
-| ID | Name | Description |
-|----|------|-------------|
-| `tech` | SyroTech | Data Engineering, Python, SQL, Cloud, Architecture |
-| `medical` | SyroMed | Medicine, pathologies, diagnostics, pharmacology |
-| `legal` | SyroLegal | Civil, commercial, and criminal law, jurisprudence |
-| `finance` | SyroFinance | Finance, accounting, investments, markets |
-| `education` | SyroEdu | Pedagogy, curriculum, learning psychology |
-| `mlops` | SyroMLOps | MLOps, model deployment, monitoring, CI/CD |
-| `general` | Syro | General-purpose polyvalent assistant |
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- Docker + Docker Compose
-- Ollama running locally (or an OpenAI API key)
-
-### 1. Clone and configure
+## Démarrer
 
 ```bash
-git clone <repo-url>
-cd Syro/Syro/Syro
-cp .env.example .env
-# Edit .env: set SECRET_KEY, and either OPENAI_API_KEY or OLLAMA_BASE_URL
+docker compose up -d --build                                # stack complète
+docker compose exec syro-api python scripts/load_demo.py    # documents de démo
 ```
 
-### 2. Launch all services
+Aucun `.env` n'est nécessaire : Ollama local, secret JWT généré, compte démo `demo@syro.local` / `syro-demo`.
+
+### Développement local (API avec hot reload)
 
 ```bash
-# Quick start (dev/demo): API + Worker + Qdrant + Redis + MLflow
-docker-compose up -d
-
-# Production (full stack): + Frontend (Prometheus optionnel, à décommenter)
-docker-compose -f infra/docker-compose.yml up -d
-
-# With local Ollama LLM
-docker-compose -f infra/docker-compose.yml -f infra/docker-compose.local-llm.yml up -d
+python -m venv .venv && source .venv/bin/activate      # Windows : .venv\Scripts\activate
+pip install -r requirements-dev.txt                     # + requirements-ml.txt pour le reranker
+cp .env.example .env    # décommenter QDRANT_URL / OLLAMA_BASE_URL (localhost) et CELERY_TASK_ALWAYS_EAGER=true
+make dev                # Qdrant + Redis + Ollama en Docker, API sur :8000
+cd frontend && npm install && npm run dev               # UI sur :5173
 ```
 
-Quick-start services:
-- **API** → http://localhost:8000 (Swagger at `/docs`)
-- **Celery Worker** → async document ingestion
-- **Qdrant** → http://localhost:6333
-- **Redis** → localhost:6379 (Celery broker)
-- **MLflow** → http://localhost:5000
+## Commandes
 
-### 3. Initialize the database
+| Commande | Rôle |
+|---|---|
+| `make up` / `make down` | Démarrer / arrêter la stack (données conservées) |
+| `make demo` | Charger les 19 documents de démo |
+| `make logs` | Logs API + worker |
+| `make reindex` | Réindexer tout (après un changement de modèle d'embedding ou de chunking) |
+| `make test` | 147 tests, sans aucun service externe |
+| `make lint` / `make format` | Ruff + Black (comme la CI) |
+| `make eval-retrieval` | Recall/nDCG/MRR sur la stack réelle → `evaluation/report.json` |
+| `make eval` | + RAGAS (`pip install -r evaluation/requirements-eval.txt`) |
 
-```bash
-docker-compose exec api python scripts/init_db.py
-```
+## API
 
-### 4. Create your first organization and user
+Swagger interactif : http://localhost:8000/docs. Authentification : `POST /auth/login` (form `username`, `password`), puis `Authorization: Bearer <token>`.
 
-```bash
-# Create organization (owner token required — see docs)
-curl -X POST http://localhost:8000/admin/organizations \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Acme Corp", "credit_balance": 1000}'
+| Endpoint | Description |
+|---|---|
+| `POST /chat/message` | `{content, conversation_id?, domain?}` → `{message, sources[], conversation_id, usage}` |
+| `POST /chat/message/stream` | SSE : `event: sources` (JSON), puis les fragments `data:`, puis `data: [DONE]` (`event: error` en cas d'échec) |
+| `POST /domains/{domain}/chat/message` | Idem, domaine imposé dans l'URL |
+| `POST /documents/files` | Multipart `file`, `domain?`, `tags?` → `queued` |
+| `POST /documents/text` | `{title, content, domain?, tags?}` |
+| `POST /documents/upload-with-classification` | Upload + domaine détecté renvoyé immédiatement |
+| `GET /documents` · `GET /documents/{id}` · `DELETE /documents/{id}` | Liste, statut d'ingestion, suppression |
+| `GET /health` · `GET /health/ready` | Liveness · état de Qdrant, du LLM et du reranker |
+| `GET /domains` | Domaines disponibles |
+| `/admin/*` | Organisation de l'appelant uniquement : utilisateurs, crédits |
+| `/permissions/*`, `/profile/*`, `/mlops/*` | Permissions documentaires, profil, métriques MLflow |
 
-# Create a user
-curl -X POST http://localhost:8000/admin/users \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"organization_id": 1, "email": "alice@acme.com", "password": "secret", "role": "member"}'
-```
+`domain` absent ou `general` : recherche dans tous les documents autorisés. Sinon, filtre sur ce domaine et persona dédiée.
 
-### 5. Login and get a token
-
-```bash
-curl -X POST http://localhost:8000/auth/login \
-  -d "username=alice@acme.com&password=secret"
-```
-
-### 6. Upload a document
-
-```bash
-curl -X POST http://localhost:8000/documents/upload \
-  -H "Authorization: Bearer <token>" \
-  -F "file=@my_doc.pdf"
-```
-
-### 7. Chat
-
-```bash
-# General chat (auto-detects domain)
-curl -X POST http://localhost:8000/chat/message \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "What does the document say about X?"}'
-
-# Domain-specific chat
-curl -X POST http://localhost:8000/domains/tech/chat/message \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "How do I optimize a Spark join?"}'
-```
-
----
-
-## Local Development (without Docker)
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Start Qdrant
-docker run -p 6333:6333 qdrant/qdrant
-
-# Start Redis (for Celery)
-docker run -p 6379:6379 redis:7-alpine
-
-# Initialize DB
-python scripts/init_db.py
-
-# Run API
-uvicorn app.main:app --reload --port 8000
-
-# Run Celery worker (separate terminal)
-celery -A app.worker worker --loglevel=info
-```
-
----
-
-## API Reference
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/login` | Get JWT token |
-| POST | `/chat/message` | Chat (auto domain detection) |
-| POST | `/chat/stream` | SSE streaming chat |
-| POST | `/domains/{domain}/chat/message` | Chat on specific domain |
-| POST | `/domains/{domain}/chat/stream` | SSE streaming on specific domain |
-| POST | `/documents/upload` | Upload document (async ingestion) |
-| GET | `/documents` | List documents |
-| DELETE | `/documents/{id}` | Delete document |
-| POST | `/domains/{domain}/documents/upload` | Upload to specific domain |
-| GET | `/domains` | List all domains |
-| GET | `/health` | Health check |
-| GET | `/metrics` | Prometheus metrics |
-| GET | `/mlops/metrics` | MLflow experiment metrics |
-| POST | `/mlops/benchmark` | Run latency benchmark across modes |
-| GET | `/admin/organizations` | List orgs (owner only) |
-| POST | `/admin/users` | Create user (owner/admin) |
-| GET | `/admin/organizations/{id}/users` | List users in org |
-| GET | `/profile/me` | Get current user profile |
-| PUT | `/profile/me` | Update profile |
-| GET | `/permissions/{user_id}` | Get user permissions |
-
-Full interactive docs: http://localhost:8000/docs
-
----
-
-## RAGAS Evaluation
-
-Syro ships with a reproducible evaluation suite (20 Q/A pairs across Tech and MLOps domains).
-
-```bash
-# Install eval dependencies
-pip install -r evaluation/requirements-eval.txt
-
-# Run with OpenAI judge (default)
-export OPENAI_API_KEY=sk-...
-python evaluation/evaluate.py
-
-# Run with Ollama judge
-USE_OLLAMA=true python evaluation/evaluate.py
-```
-
-Results are written to `evaluation/results.json`.
-
-| Metric | Score |
-|--------|-------|
-| Faithfulness | — |
-| Answer Relevancy | — |
-| Context Recall | — |
-| Context Precision | — |
-
-> Run `python evaluation/evaluate.py` to populate scores.
-
----
+Codes d'erreur du chat : `404` (conversation d'un autre utilisateur, domaine inconnu), `503` (LLM indisponible), `402` (crédits épuisés), `429` (limite de débit).
 
 ## Configuration
 
-All settings are read from environment variables or `.env` file. Key variables:
+Toutes les variables sont dans [`.env.example`](.env.example) (source : `app/config.py`). Les principales :
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | `dev-secret-change-me` | **Change in production** |
-| `LLM_PROVIDER` | `ollama` | `ollama` or `openai` |
-| `CHAT_MODEL` | `llama3.2` | Model name |
-| `EMBEDDINGS_MODEL` | `nomic-embed-text` | Embedding model |
-| `EMBEDDING_DIMENSIONS` | `768` | Must match the embedding model |
-| `OPENAI_API_KEY` | — | Required if `LLM_PROVIDER=openai` |
-| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama endpoint |
-| `LLM_TIMEOUT` | `60` | Chat LLM call timeout (seconds) |
-| `EMBEDDING_TIMEOUT` | `30` | Embedding call timeout (seconds) |
-| `LLM_MAX_RETRIES` | `2` | Automatic retries on transient LLM errors |
-| `CIRCUIT_BREAKER_THRESHOLD` | `5` | Consecutive failures before the breaker opens |
-| `CIRCUIT_BREAKER_RESET_SECONDS` | `30` | Cool-down before a half-open trial call |
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint |
-| `DB_PATH` | `db/syro.db` | SQLite database path |
-| `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Redis for Celery |
-| `PERFORMANCE_MODE` | `quality` | `fast`, `quality`, or `adaptive` |
-| `ENABLE_RERANKING` | `true` | Enable BGE cross-encoder reranker |
-| `HYBRID_SEARCH_ALPHA` | `0.7` | Vector weight in hybrid search (0=BM25, 1=vector) |
-| `RETRIEVAL_TOP_K` | `10` | Candidates before reranking |
-| `RERANK_TOP_K` | `5` | Final chunks sent to LLM |
-| `RERANK_WEIGHT` | `0.7` | Reranker score weight in final score |
-| `MLOPS_ENABLED` | `true` | Enable MLflow tracking |
-| `TRACING_ENABLED` | `false` | Enable OpenTelemetry tracing |
-| `CORS_ALLOW_ORIGINS` | `*` | Comma-separated origins in production |
+| Variable | Défaut | Effet |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` | `ollama` ou `openai` |
+| `CHAT_MODEL` / `EMBEDDINGS_MODEL` | `llama3.2` / `nomic-embed-text` | Modèles |
+| `EMBEDDING_DIMENSIONS` | `768` | Doit correspondre au modèle (1536 pour `text-embedding-3-small`) |
+| `PERFORMANCE_MODE` | `quality` | `quality` = reranker ; `fast` = sans reranker, moins de candidats |
+| `RETRIEVAL_TOP_K` / `RERANK_TOP_K` | `20` / `5` | Candidats par retriever / chunks envoyés au LLM |
+| `RERANK_MIN_SCORE` | `0.02` | Seuil d'abstention du cross-encoder |
+| `CHUNK_SIZE_TOKENS` / `CHUNK_OVERLAP_TOKENS` | `400` / `60` | Chunking (réindexer après modification) |
+| `ENABLE_QUERY_REWRITING`, `ENABLE_HYDE`, `ENABLE_CRAG`, `ENABLE_SELF_RAG`, `ENABLE_QUERY_DECOMPOSITION`, `ENABLE_SEMANTIC_CACHE` | `false` | Couches optionnelles |
+| `SECRET_KEY` | *(généré)* | Vide : généré puis stocké dans le volume de données |
+| `SYRO_ADMIN_EMAIL` / `SYRO_ADMIN_PASSWORD` | compte démo | Créé au premier démarrage |
+| `WITH_RERANKER` (build) | `true` | `false` : image sans torch (plus légère), ordre RRF seul |
 
-See `.env.example` for the full list.
+**Changer de modèle d'embedding** : les dimensions changent, donc utilisez une nouvelle `QDRANT_COLLECTION_NAME` puis lancez `make reindex`. L'API refuse explicitement une collection dont la dimension ne correspond pas.
 
----
+## Organisation du code
 
-## Architecture
+| Module | Rôle |
+|---|---|
+| `services/rag.py` | Indexation transactionnelle ; point d'entrée du retrieval (cache → décomposition / CRAG / hybride) |
+| `services/hybrid_search.py` | Dense + BM25 en parallèle, `fuse_rrf`, `rerank_or_truncate` |
+| `services/vector_store.py` | Qdrant : une collection, filtres `organization_id` / `domain` / `document_id` indexés |
+| `services/bm25_search.py` | Index BM25 par organisation, invalidé par empreinte SQL (ingestion faite par le worker) |
+| `services/reranker.py` | Cross-encoder, sigmoïde, seuil d'abstention |
+| `services/llm.py` | Ollama/OpenAI, préfixes d'embedding, cache, circuit breaker, prompt RAG |
+| `services/chunker.py` | Découpe par titres puis par fenêtres de tokens ; tableaux Markdown préservés |
+| `services/ingestion.py` | Extraction → domaine → indexation, statut `queued/processing/complete/failed` |
+| `services/chat.py` | Conversations (contrôle de propriété), retrieval, génération, sources |
+| `services/domain_detector.py` | Classement FR/EN par mots-clés |
+| `services/crag.py`, `self_rag.py`, `decompose.py`, `hyde.py`, `query_rewriter.py`, `semantic_cache.py` | Couches optionnelles |
 
-```
-Syro/
-├── app/
-│   ├── main.py              # FastAPI app, middleware, routers
-│   ├── config.py            # Pydantic settings
-│   ├── domains.py           # Domain configs (7 domains)
-│   ├── auth.py              # JWT + bcrypt
-│   ├── dependencies.py      # FastAPI Depends (auth, db, rate limit)
-│   ├── schemas.py           # Pydantic request/response models
-│   ├── db.py                # SQLite connection, db_session context manager
-│   ├── routers/
-│   │   ├── auth.py          # POST /auth/login
-│   │   ├── chat.py          # Chat endpoints (standard + domain)
-│   │   ├── documents.py     # Upload, list, delete
-│   │   ├── admin.py         # Org/user management (owner/admin)
-│   │   ├── permissions.py   # Per-user permission management
-│   │   ├── profile.py       # User profile CRUD
-│   │   ├── agents.py        # Agent-mode endpoints
-│   │   └── mlops.py         # MLflow metrics, benchmark, alerts
-│   ├── services/
-│   │   ├── chat.py          # build_answer, conversation management
-│   │   ├── rag.py           # Hybrid retrieval orchestration
-│   │   ├── vector_store.py  # Qdrant client (reconnect-safe)
-│   │   ├── bm25_search.py   # In-memory BM25 index
-│   │   ├── reranker.py      # BGE cross-encoder reranker
-│   │   ├── llm.py           # LLM + embedding calls
-│   │   ├── ingestion.py     # Document chunking + indexing pipeline
-│   │   ├── celery_client.py # Celery task dispatch + BackgroundTasks fallback
-│   │   ├── domain_detector.py  # ML-based domain auto-detection
-│   │   ├── multi_domain_rag.py # Cross-domain search
-│   │   ├── permissions_service.py  # Access level + quality level gates
-│   │   ├── stats_service.py    # Usage statistics
-│   │   ├── adaptive_performance.py  # Latency-based mode switching
-│   │   ├── mlops_tracker.py    # MLflow wrapper
-│   │   └── mlops_alerts.py     # Threshold-based alerting
-│   ├── middleware/
-│   │   ├── logging.py       # Structured JSON logging
-│   │   ├── metrics.py       # Prometheus middleware
-│   │   └── tracing.py       # OpenTelemetry setup
-│   └── security/
-│       ├── rate_limiter.py  # Redis/in-memory rate limiting
-│       └── upload_validator.py  # MIME + size validation
-├── db/
-│   ├── schema.sql           # Full schema with indexes, triggers, seed data
-│   └── migration_profiles_permissions.sql  # Incremental migration
-├── scripts/
-│   └── init_db.py           # DB init + migration runner
-├── evaluation/
-│   ├── eval_dataset.json    # 20 Q/A pairs (Tech + MLOps)
-│   ├── evaluate.py          # RAGAS evaluation script
-│   ├── requirements-eval.txt
-│   └── results.json         # Scores (generated by evaluate.py)
-├── requirements.txt
-└── infra/
-    ├── docker-compose.yml               # Base stack (API + Worker + Qdrant + Redis + MLflow)
-    ├── docker-compose.local-llm.yml     # Override: Ollama sidecar
-    ├── docker-compose.openai.yml        # Override: OpenAI provider
-    └── docker/                          # Per-service Dockerfiles
-```
-
----
-
-## Performance Modes
-
-| Mode | top_k | rerank_top_k | Reranking | Use case |
-|------|-------|--------------|-----------|----------|
-| `fast` | 5 | 3 | ✗ | High-throughput, latency-sensitive |
-| `quality` | 15 | 5 | ✓ | Best answer quality |
-| `adaptive` | 15 | 5 | ✓ | Auto-switch based on rolling latency |
-
-Switch mode: `PERFORMANCE_MODE=fast` in `.env`, or via `/mlops/benchmark` to compare modes.
-
----
-
-## License
-
-MIT
+Base de données : `db/schema.sql`, créée et mise à niveau automatiquement au démarrage (`scripts/init_db.py`).

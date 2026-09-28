@@ -9,10 +9,3 @@ scrape_configs:
     static_configs:
       - targets: ['syro-api:8000']
     metrics_path: '/metrics'
-    
-  # Worker Syro (si expose des métriques)
-  - job_name: 'syro-worker'
-    static_configs:
-      - targets: ['syro-worker:8001']  # Si le worker expose un endpoint metrics
-    metrics_path: '/metrics'
-

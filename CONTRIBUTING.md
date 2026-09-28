@@ -1,26 +1,15 @@
-# Contributing to Syro
-## How to Contribute
+# Contribuer à Syro
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-## Code Style
-
-- Follow PEP 8 for Python code
-- Use type hints where possible
-- Write tests for new features
-- Update documentation as needed
-## Testing
+1. Créer une branche (`git checkout -b feature/ma-feature`).
+2. Installer l'environnement de dev : `cd Syro && pip install -r requirements-dev.txt`.
+3. Avant de pousser :
 
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=app tests/
+make test     # 147 tests, sans service externe
+make lint     # ruff + black, comme la CI
+cd frontend && npm run build   # type-check + build du frontend
 ```
-## Questions?
 
-Open an issue for questions or discussions.
+4. Ouvrir une Pull Request. La CI lance tests, lint et build du frontend.
+
+Conventions : type hints, un test pour chaque bug corrigé, et la doc (`README.md`, `docs/architecture.md`) mise à jour quand le comportement change.
