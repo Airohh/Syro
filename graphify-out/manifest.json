@@ -1,0 +1,878 @@
+{
+  "Syro/app/__init__.py": {
+    "mtime": 1790621760.278919,
+    "seen": 1790625474.555444,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "Syro/app/auth.py": {
+    "mtime": 1790621760.2816105,
+    "seen": 1790625474.5554483,
+    "ast_hash": "960933709148c7ee908e9a77d441a007",
+    "semantic_hash": "960933709148c7ee908e9a77d441a007"
+  },
+  "Syro/app/config.py": {
+    "mtime": 1790620384.4445026,
+    "seen": 1790625474.5554504,
+    "ast_hash": "a28baa58f94004d1c48b7dff0aaf2e7b",
+    "semantic_hash": "a28baa58f94004d1c48b7dff0aaf2e7b"
+  },
+  "Syro/app/db.py": {
+    "mtime": 1790621760.286254,
+    "seen": 1790625474.5554519,
+    "ast_hash": "b2b50af8c4acb96dc244ee0572faa45b",
+    "semantic_hash": "b2b50af8c4acb96dc244ee0572faa45b"
+  },
+  "Syro/app/dependencies.py": {
+    "mtime": 1790621760.2892594,
+    "seen": 1790625474.5554538,
+    "ast_hash": "793ed4f84735891809d6ce6c152f9a5f",
+    "semantic_hash": "793ed4f84735891809d6ce6c152f9a5f"
+  },
+  "Syro/app/domains.py": {
+    "mtime": 1790620501.1285055,
+    "seen": 1790625474.5554554,
+    "ast_hash": "14d1bd7a9a2e7d1886bb79efed09e024",
+    "semantic_hash": "14d1bd7a9a2e7d1886bb79efed09e024"
+  },
+  "Syro/app/main.py": {
+    "mtime": 1790622263.876057,
+    "seen": 1790625474.5554576,
+    "ast_hash": "dd4f0b464093d3b5a5c1ab4c67dde5d7",
+    "semantic_hash": "dd4f0b464093d3b5a5c1ab4c67dde5d7"
+  },
+  "Syro/app/middleware/__init__.py": {
+    "mtime": 1790619614.1852498,
+    "seen": 1790625474.5554678,
+    "ast_hash": "89e6ef540aff353d1667fcd8392a02c5",
+    "semantic_hash": "89e6ef540aff353d1667fcd8392a02c5"
+  },
+  "Syro/app/middleware/logging.py": {
+    "mtime": 1790619614.1857882,
+    "seen": 1790625474.5554698,
+    "ast_hash": "5528c81ca4c03df6f5a736bb23820f08",
+    "semantic_hash": "5528c81ca4c03df6f5a736bb23820f08"
+  },
+  "Syro/app/middleware/metrics.py": {
+    "mtime": 1790619614.1857882,
+    "seen": 1790625474.5554714,
+    "ast_hash": "55f7e619d7642abf12237c7050c25763",
+    "semantic_hash": "55f7e619d7642abf12237c7050c25763"
+  },
+  "Syro/app/middleware/tracing.py": {
+    "mtime": 1790619614.1857882,
+    "seen": 1790625474.5554724,
+    "ast_hash": "a9aec79f0f385a21400a269a04cb28fe",
+    "semantic_hash": "a9aec79f0f385a21400a269a04cb28fe"
+  },
+  "Syro/app/routers/__init__.py": {
+    "mtime": 1790621760.2926617,
+    "seen": 1790625474.5554738,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "Syro/app/routers/admin.py": {
+    "mtime": 1790620980.4245176,
+    "seen": 1790625474.555475,
+    "ast_hash": "ea94987fd6fb57dd1d480794a42afd09",
+    "semantic_hash": "ea94987fd6fb57dd1d480794a42afd09"
+  },
+  "Syro/app/routers/auth.py": {
+    "mtime": 1790621760.295451,
+    "seen": 1790625474.5554762,
+    "ast_hash": "f7322464fd85148da4f0a73a7172f3ec",
+    "semantic_hash": "f7322464fd85148da4f0a73a7172f3ec"
+  },
+  "Syro/app/routers/chat.py": {
+    "mtime": 1790621754.3408754,
+    "seen": 1790625474.5554776,
+    "ast_hash": "f22102ab04681d84889fc148b49694c3",
+    "semantic_hash": "f22102ab04681d84889fc148b49694c3"
+  },
+  "Syro/app/routers/documents.py": {
+    "mtime": 1790621754.390372,
+    "seen": 1790625474.5554786,
+    "ast_hash": "ec8a09269841e9228d9fc44188178f82",
+    "semantic_hash": "ec8a09269841e9228d9fc44188178f82"
+  },
+  "Syro/app/routers/mlops.py": {
+    "mtime": 1790621034.840519,
+    "seen": 1790625474.5554798,
+    "ast_hash": "e1e9254cf6a2ca050fa644756b0f1d3e",
+    "semantic_hash": "e1e9254cf6a2ca050fa644756b0f1d3e"
+  },
+  "Syro/app/routers/permissions.py": {
+    "mtime": 1790620992.551842,
+    "seen": 1790625474.5554807,
+    "ast_hash": "2e6544592f4ae5d2cfc228a4b1f7f6a5",
+    "semantic_hash": "2e6544592f4ae5d2cfc228a4b1f7f6a5"
+  },
+  "Syro/app/routers/profile.py": {
+    "mtime": 1790619614.186129,
+    "seen": 1790625474.555482,
+    "ast_hash": "dac70ae7041a1499c231bc909c1d6eb9",
+    "semantic_hash": "dac70ae7041a1499c231bc909c1d6eb9"
+  },
+  "Syro/app/schemas.py": {
+    "mtime": 1790621760.3020804,
+    "seen": 1790625474.555483,
+    "ast_hash": "0e09d58b7ae17628958074c487414cff",
+    "semantic_hash": "0e09d58b7ae17628958074c487414cff"
+  },
+  "Syro/app/security/__init__.py": {
+    "mtime": 1790620920.2952816,
+    "seen": 1790625474.555484,
+    "ast_hash": "3fb10f3da9c31ba1ac7590bc5c983ad9",
+    "semantic_hash": "3fb10f3da9c31ba1ac7590bc5c983ad9"
+  },
+  "Syro/app/security/headers.py": {
+    "mtime": 1790619614.1885774,
+    "seen": 1790625474.5554855,
+    "ast_hash": "1127698b01b171330d0761f350dbb96f",
+    "semantic_hash": "1127698b01b171330d0761f350dbb96f"
+  },
+  "Syro/app/security/rate_limiter.py": {
+    "mtime": 1790622058.947871,
+    "seen": 1790625474.555487,
+    "ast_hash": "24c86c8442d64ac33e9f62145e6d15a1",
+    "semantic_hash": "24c86c8442d64ac33e9f62145e6d15a1"
+  },
+  "Syro/app/services/__init__.py": {
+    "mtime": 1790621760.30588,
+    "seen": 1790625474.555488,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "Syro/app/services/bm25_search.py": {
+    "mtime": 1790621754.53678,
+    "seen": 1790625474.555489,
+    "ast_hash": "646ade985e7b2d81bb1830d37d38fe1b",
+    "semantic_hash": "646ade985e7b2d81bb1830d37d38fe1b"
+  },
+  "Syro/app/services/celery_client.py": {
+    "mtime": 1790620756.9525118,
+    "seen": 1790625474.5554903,
+    "ast_hash": "09771703dfe37b4731bf9008caf0d88f",
+    "semantic_hash": "09771703dfe37b4731bf9008caf0d88f"
+  },
+  "Syro/app/services/chat.py": {
+    "mtime": 1790621754.55161,
+    "seen": 1790625474.5554912,
+    "ast_hash": "219ece9f928452b47f3802c235279aec",
+    "semantic_hash": "219ece9f928452b47f3802c235279aec"
+  },
+  "Syro/app/services/chunker.py": {
+    "mtime": 1790621754.574397,
+    "seen": 1790625474.5554924,
+    "ast_hash": "81b6eea8aa4807699f214398d7a3cb06",
+    "semantic_hash": "81b6eea8aa4807699f214398d7a3cb06"
+  },
+  "Syro/app/services/circuit_breaker.py": {
+    "mtime": 1790619614.1887825,
+    "seen": 1790625474.5554934,
+    "ast_hash": "5df7ef03528839f72c3a6b2acc35483d",
+    "semantic_hash": "5df7ef03528839f72c3a6b2acc35483d"
+  },
+  "Syro/app/services/crag.py": {
+    "mtime": 1790620627.8419201,
+    "seen": 1790625474.555494,
+    "ast_hash": "fa27c68654bbcd952511518646d29d95",
+    "semantic_hash": "fa27c68654bbcd952511518646d29d95"
+  },
+  "Syro/app/services/decompose.py": {
+    "mtime": 1790621754.614316,
+    "seen": 1790625474.5554955,
+    "ast_hash": "aa75cf48aff8e448f82b165afdd2a887",
+    "semantic_hash": "aa75cf48aff8e448f82b165afdd2a887"
+  },
+  "Syro/app/services/domain_detector.py": {
+    "mtime": 1790621754.7525382,
+    "seen": 1790625474.5554965,
+    "ast_hash": "a51212dce8d5d503fa8f123e76783aa1",
+    "semantic_hash": "a51212dce8d5d503fa8f123e76783aa1"
+  },
+  "Syro/app/services/file_extractor.py": {
+    "mtime": 1790621760.3088312,
+    "seen": 1790625474.5554974,
+    "ast_hash": "f3486dd5df31e70e8544419562e21954",
+    "semantic_hash": "f3486dd5df31e70e8544419562e21954"
+  },
+  "Syro/app/services/hybrid_search.py": {
+    "mtime": 1790621754.77163,
+    "seen": 1790625474.5554986,
+    "ast_hash": "6a1873a26d8de311b36d8c06cb58e8b8",
+    "semantic_hash": "6a1873a26d8de311b36d8c06cb58e8b8"
+  },
+  "Syro/app/services/hyde.py": {
+    "mtime": 1790620653.1380758,
+    "seen": 1790625474.5554996,
+    "ast_hash": "f845f9def2c2951106e6727ca92a0f16",
+    "semantic_hash": "f845f9def2c2951106e6727ca92a0f16"
+  },
+  "Syro/app/services/ingestion.py": {
+    "mtime": 1790620752.2125118,
+    "seen": 1790625474.5555005,
+    "ast_hash": "52f8eeed3805057635d624da55dff972",
+    "semantic_hash": "52f8eeed3805057635d624da55dff972"
+  },
+  "Syro/app/services/langfuse_tracer.py": {
+    "mtime": 1790619614.1887825,
+    "seen": 1790625474.5555015,
+    "ast_hash": "3794f1610134459f64b59a1189ac88a2",
+    "semantic_hash": "3794f1610134459f64b59a1189ac88a2"
+  },
+  "Syro/app/services/llm.py": {
+    "mtime": 1790621755.063224,
+    "seen": 1790625474.5555027,
+    "ast_hash": "1ccb2e6f3556da7b3354171740b847ce",
+    "semantic_hash": "1ccb2e6f3556da7b3354171740b847ce"
+  },
+  "Syro/app/services/mlops_alerts.py": {
+    "mtime": 1790619614.1887825,
+    "seen": 1790625474.5555036,
+    "ast_hash": "86ebcffb08ae3613501a2e7216f93cbe",
+    "semantic_hash": "86ebcffb08ae3613501a2e7216f93cbe"
+  },
+  "Syro/app/services/mlops_tracker.py": {
+    "mtime": 1790619614.1887825,
+    "seen": 1790625474.5555046,
+    "ast_hash": "faa5b41779d616315649ba0192a238de",
+    "semantic_hash": "faa5b41779d616315649ba0192a238de"
+  },
+  "Syro/app/services/permissions_service.py": {
+    "mtime": 1790619614.1887825,
+    "seen": 1790625474.5555058,
+    "ast_hash": "1bdd99f8758e609c59a77a4d95996250",
+    "semantic_hash": "1bdd99f8758e609c59a77a4d95996250"
+  },
+  "Syro/app/services/query_rewriter.py": {
+    "mtime": 1790620653.1378644,
+    "seen": 1790625474.5555065,
+    "ast_hash": "06ece3f904cc78f9789088dd8069ddad",
+    "semantic_hash": "06ece3f904cc78f9789088dd8069ddad"
+  },
+  "Syro/app/services/rag.py": {
+    "mtime": 1790620732.2805114,
+    "seen": 1790625474.5555074,
+    "ast_hash": "8d3aacfaee233b311d704fcacee06839",
+    "semantic_hash": "8d3aacfaee233b311d704fcacee06839"
+  },
+  "Syro/app/services/reranker.py": {
+    "mtime": 1790621754.9633172,
+    "seen": 1790625474.5555096,
+    "ast_hash": "dba52553730406a5976362f0ceefa819",
+    "semantic_hash": "dba52553730406a5976362f0ceefa819"
+  },
+  "Syro/app/services/retrieval_filters.py": {
+    "mtime": 1790619614.1887825,
+    "seen": 1790625474.5555105,
+    "ast_hash": "5ac191e00a41412b3cd56e6e29478af8",
+    "semantic_hash": "5ac191e00a41412b3cd56e6e29478af8"
+  },
+  "Syro/app/services/retrieval_scoring.py": {
+    "mtime": 1790620599.952508,
+    "seen": 1790625474.5555112,
+    "ast_hash": "4065a46244424129b6cc04033bf178cc",
+    "semantic_hash": "4065a46244424129b6cc04033bf178cc"
+  },
+  "Syro/app/services/self_rag.py": {
+    "mtime": 1790620627.842146,
+    "seen": 1790625474.5555127,
+    "ast_hash": "0b40e55ebda023151ba6e7dd922dd7fd",
+    "semantic_hash": "0b40e55ebda023151ba6e7dd922dd7fd"
+  },
+  "Syro/app/services/semantic_cache.py": {
+    "mtime": 1790621755.124508,
+    "seen": 1790625474.5555134,
+    "ast_hash": "52a7cbd9388b77584ab1fa1698382b76",
+    "semantic_hash": "52a7cbd9388b77584ab1fa1698382b76"
+  },
+  "Syro/app/services/stats_service.py": {
+    "mtime": 1790619614.1887825,
+    "seen": 1790625474.5555143,
+    "ast_hash": "8a41410df07444974516b67e6501aac6",
+    "semantic_hash": "8a41410df07444974516b67e6501aac6"
+  },
+  "Syro/app/services/vector_store.py": {
+    "mtime": 1790620428.6765037,
+    "seen": 1790625474.5555158,
+    "ast_hash": "b43dabc5da835dbfe8b7d3dd896f6f2e",
+    "semantic_hash": "b43dabc5da835dbfe8b7d3dd896f6f2e"
+  },
+  "Syro/db/schema.sql": {
+    "mtime": 1790620874.391247,
+    "seen": 1790625474.5555167,
+    "ast_hash": "7e066221b3d241487b6a7cd05e038a68",
+    "semantic_hash": "7e066221b3d241487b6a7cd05e038a68"
+  },
+  "Syro/evaluation/benchmark.py": {
+    "mtime": 1790619614.1981156,
+    "seen": 1790625474.5555177,
+    "ast_hash": "29447fc12effe85d51b3723e8b14b6b5",
+    "semantic_hash": "29447fc12effe85d51b3723e8b14b6b5"
+  },
+  "Syro/evaluation/build_golden_set.py": {
+    "mtime": 1790619614.1983645,
+    "seen": 1790625474.5555186,
+    "ast_hash": "9f1471d7fdf6a48cf7cc9ce38ced3761",
+    "semantic_hash": "9f1471d7fdf6a48cf7cc9ce38ced3761"
+  },
+  "Syro/evaluation/eval_dataset.json": {
+    "mtime": 1790619614.1996794,
+    "seen": 1790625474.5555198,
+    "ast_hash": "317d596f58072f99028ef84fc633922d",
+    "semantic_hash": "317d596f58072f99028ef84fc633922d"
+  },
+  "Syro/evaluation/evaluate.py": {
+    "mtime": 1790621291.0674407,
+    "seen": 1790625474.5555208,
+    "ast_hash": "413e76bd5ab6f83cc82e4a3ed7b1363e",
+    "semantic_hash": "413e76bd5ab6f83cc82e4a3ed7b1363e"
+  },
+  "Syro/evaluation/ingest_corpus.py": {
+    "mtime": 1790621230.0405238,
+    "seen": 1790625474.5555215,
+    "ast_hash": "5f30b1addb3eac287098d1a38f2eda5c",
+    "semantic_hash": "5f30b1addb3eac287098d1a38f2eda5c"
+  },
+  "Syro/evaluation/metrics.py": {
+    "mtime": 1790619614.1996794,
+    "seen": 1790625474.5555224,
+    "ast_hash": "9112d1a7c25e3a6b77e90bb549d90307",
+    "semantic_hash": "9112d1a7c25e3a6b77e90bb549d90307"
+  },
+  "Syro/evaluation/retrieval_thresholds.json": {
+    "mtime": 1790619614.1996794,
+    "seen": 1790625474.5555236,
+    "ast_hash": "8a8aa5fe400f1c2a7607539eb9408e8f",
+    "semantic_hash": "8a8aa5fe400f1c2a7607539eb9408e8f"
+  },
+  "Syro/evaluation/tune.py": {
+    "mtime": 1790621229.9903696,
+    "seen": 1790625474.5555248,
+    "ast_hash": "59bb030d5ebfd0905142b9f416bd4953",
+    "semantic_hash": "59bb030d5ebfd0905142b9f416bd4953"
+  },
+  "Syro/evaluation/validate_golden_set.py": {
+    "mtime": 1790619614.1996794,
+    "seen": 1790625474.5555258,
+    "ast_hash": "6a3dafe1c0ec8cadefdf4642c3a36e17",
+    "semantic_hash": "6a3dafe1c0ec8cadefdf4642c3a36e17"
+  },
+  "Syro/evaluation/validate_retrieval_thresholds.py": {
+    "mtime": 1790619614.1996794,
+    "seen": 1790625474.555527,
+    "ast_hash": "0f051133e8e46b4e41c75bf90d220f5c",
+    "semantic_hash": "0f051133e8e46b4e41c75bf90d220f5c"
+  },
+  "Syro/frontend/.esbuildrc.json": {
+    "mtime": 1790619614.1996794,
+    "seen": 1790625474.555528,
+    "ast_hash": "6cce08a6fc53f187be683cb91d1a2e66",
+    "semantic_hash": "6cce08a6fc53f187be683cb91d1a2e66"
+  },
+  "Syro/frontend/package.json": {
+    "mtime": 1790619614.200934,
+    "seen": 1790625474.5555298,
+    "ast_hash": "d29332ddfc77f9c0efdbcfc7f076c001",
+    "semantic_hash": "d29332ddfc77f9c0efdbcfc7f076c001"
+  },
+  "Syro/frontend/postcss.config.js": {
+    "mtime": 1790619614.200934,
+    "seen": 1790625474.5555308,
+    "ast_hash": "4422272f0011fcf0fa7ead7af93d82d1",
+    "semantic_hash": "4422272f0011fcf0fa7ead7af93d82d1"
+  },
+  "Syro/frontend/src/App.tsx": {
+    "mtime": 1790619614.200934,
+    "seen": 1790625474.5555317,
+    "ast_hash": "c83dc61e48077c9bbf1694eeb5932602",
+    "semantic_hash": "c83dc61e48077c9bbf1694eeb5932602"
+  },
+  "Syro/frontend/src/components/ChatBubble.tsx": {
+    "mtime": 1790621444.418792,
+    "seen": 1790625474.5555327,
+    "ast_hash": "e94b653fe0fe613af9b043dcff1260db",
+    "semantic_hash": "e94b653fe0fe613af9b043dcff1260db"
+  },
+  "Syro/frontend/src/components/ChatInput.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.555534,
+    "ast_hash": "a4df0f2ec4a30d5b24c1a8cebd14d679",
+    "semantic_hash": "a4df0f2ec4a30d5b24c1a8cebd14d679"
+  },
+  "Syro/frontend/src/components/ClassificationPreview.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.5555348,
+    "ast_hash": "e13803452a391c088ad7dc4acb37c90b",
+    "semantic_hash": "e13803452a391c088ad7dc4acb37c90b"
+  },
+  "Syro/frontend/src/components/ConversationHistory.tsx": {
+    "mtime": 1790621439.5644324,
+    "seen": 1790625474.5555356,
+    "ast_hash": "57c7a0374c28592a032ac431ea6ca320",
+    "semantic_hash": "57c7a0374c28592a032ac431ea6ca320"
+  },
+  "Syro/frontend/src/components/DocumentList.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.555537,
+    "ast_hash": "21321214719d07681eab2a380b4788f6",
+    "semantic_hash": "21321214719d07681eab2a380b4788f6"
+  },
+  "Syro/frontend/src/components/DocumentUpload.tsx": {
+    "mtime": 1790622221.394107,
+    "seen": 1790625474.555538,
+    "ast_hash": "191a6da0a9cd1b3e6ee0db4174f66635",
+    "semantic_hash": "191a6da0a9cd1b3e6ee0db4174f66635"
+  },
+  "Syro/frontend/src/components/DocumentUploader.tsx": {
+    "mtime": 1790622221.3980505,
+    "seen": 1790625474.555539,
+    "ast_hash": "f8434914ff4088ee5dadbaa960711c3e",
+    "semantic_hash": "f8434914ff4088ee5dadbaa960711c3e"
+  },
+  "Syro/frontend/src/components/DomainSelector.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.55554,
+    "ast_hash": "f06740258cb469128658895c6a6cf737",
+    "semantic_hash": "f06740258cb469128658895c6a6cf737"
+  },
+  "Syro/frontend/src/components/EmptyState.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.555541,
+    "ast_hash": "a7d60dd16283a8b15cec5209e3502947",
+    "semantic_hash": "a7d60dd16283a8b15cec5209e3502947"
+  },
+  "Syro/frontend/src/components/Header.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.555542,
+    "ast_hash": "d39000e26ccd25d19f1af35a37d90b79",
+    "semantic_hash": "d39000e26ccd25d19f1af35a37d90b79"
+  },
+  "Syro/frontend/src/components/LaunchScreen.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.555543,
+    "ast_hash": "f3571980e48c80df576d0065bf2dda99",
+    "semantic_hash": "f3571980e48c80df576d0065bf2dda99"
+  },
+  "Syro/frontend/src/components/ProfileDashboard.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.5555441,
+    "ast_hash": "bd64b0cb397414a8dffe924380330554",
+    "semantic_hash": "bd64b0cb397414a8dffe924380330554"
+  },
+  "Syro/frontend/src/components/ServiceStatus.tsx": {
+    "mtime": 1790622263.8763587,
+    "seen": 1790625474.555545,
+    "ast_hash": "478fd48110f75b90ef0ee8b7fe2985d0",
+    "semantic_hash": "478fd48110f75b90ef0ee8b7fe2985d0"
+  },
+  "Syro/frontend/src/components/Sidebar.tsx": {
+    "mtime": 1790622202.1393125,
+    "seen": 1790625474.555546,
+    "ast_hash": "94403c700580cfb0f255182de354de83",
+    "semantic_hash": "94403c700580cfb0f255182de354de83"
+  },
+  "Syro/frontend/src/components/StatsCard.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.5555472,
+    "ast_hash": "4a66a021af0d0ef909479c006e01c324",
+    "semantic_hash": "4a66a021af0d0ef909479c006e01c324"
+  },
+  "Syro/frontend/src/hooks/useLocalConversations.ts": {
+    "mtime": 1790621439.5640228,
+    "seen": 1790625474.5555482,
+    "ast_hash": "18e87ceb07da5bbe2bc5da30c786e00d",
+    "semantic_hash": "18e87ceb07da5bbe2bc5da30c786e00d"
+  },
+  "Syro/frontend/src/main.tsx": {
+    "mtime": 1790619614.2035959,
+    "seen": 1790625474.5555491,
+    "ast_hash": "2e7fc920c12908a5e547535bd68d059f",
+    "semantic_hash": "2e7fc920c12908a5e547535bd68d059f"
+  },
+  "Syro/frontend/src/pages/ChatPage.tsx": {
+    "mtime": 1790621439.5650551,
+    "seen": 1790625474.5555499,
+    "ast_hash": "419f281f0fdfc6f0e799c14790551ab3",
+    "semantic_hash": "419f281f0fdfc6f0e799c14790551ab3"
+  },
+  "Syro/frontend/src/pages/LoginPage.tsx": {
+    "mtime": 1790621483.5590332,
+    "seen": 1790625474.555551,
+    "ast_hash": "41c16e395b40f8938a19d60e1be34891",
+    "semantic_hash": "41c16e395b40f8938a19d60e1be34891"
+  },
+  "Syro/frontend/src/pages/ProfilePage.tsx": {
+    "mtime": 1790619614.2051473,
+    "seen": 1790625474.555552,
+    "ast_hash": "37b3b986fb243449855fd3dc00efa047",
+    "semantic_hash": "37b3b986fb243449855fd3dc00efa047"
+  },
+  "Syro/frontend/src/services/api.ts": {
+    "mtime": 1790621475.0792305,
+    "seen": 1790625474.555553,
+    "ast_hash": "f1c37d2b5a4d9697f4c1bdb0a25ed3df",
+    "semantic_hash": "f1c37d2b5a4d9697f4c1bdb0a25ed3df"
+  },
+  "Syro/frontend/src/services/profileService.ts": {
+    "mtime": 1790619614.2054467,
+    "seen": 1790625474.5555553,
+    "ast_hash": "e74aad08aa05b328fb8ec37240e99156",
+    "semantic_hash": "e74aad08aa05b328fb8ec37240e99156"
+  },
+  "Syro/frontend/src/utils/domainConfig.ts": {
+    "mtime": 1790619614.2054467,
+    "seen": 1790625474.5555565,
+    "ast_hash": "a0913539ce29b48a17050f514a8d887a",
+    "semantic_hash": "a0913539ce29b48a17050f514a8d887a"
+  },
+  "Syro/frontend/src/utils/domainPorts.ts": {
+    "mtime": 1790619614.2056901,
+    "seen": 1790625474.5555577,
+    "ast_hash": "0d5fb703e7e7792e0a6141b782b20416",
+    "semantic_hash": "0d5fb703e7e7792e0a6141b782b20416"
+  },
+  "Syro/frontend/src/utils/domainStyles.ts": {
+    "mtime": 1790619614.2056901,
+    "seen": 1790625474.5555587,
+    "ast_hash": "a685154c960e498d60b3f39b20f2e7cb",
+    "semantic_hash": "a685154c960e498d60b3f39b20f2e7cb"
+  },
+  "Syro/frontend/tailwind.config.js": {
+    "mtime": 1790619614.2056901,
+    "seen": 1790625474.5555596,
+    "ast_hash": "0dccea30d44ac8006e2dc46240a54cae",
+    "semantic_hash": "0dccea30d44ac8006e2dc46240a54cae"
+  },
+  "Syro/frontend/tsconfig.json": {
+    "mtime": 1790619614.2056901,
+    "seen": 1790625474.555561,
+    "ast_hash": "80d2f738b4c71f8328bc90d1bba19028",
+    "semantic_hash": "80d2f738b4c71f8328bc90d1bba19028"
+  },
+  "Syro/frontend/tsconfig.node.json": {
+    "mtime": 1790619614.2056901,
+    "seen": 1790625474.5555618,
+    "ast_hash": "fdad50457a9cb7df721a9ffb2fa59af6",
+    "semantic_hash": "fdad50457a9cb7df721a9ffb2fa59af6"
+  },
+  "Syro/frontend/vite.config.ts": {
+    "mtime": 1790619614.2056901,
+    "seen": 1790625474.555563,
+    "ast_hash": "0a61cefe26a9ff9168070a2079953e9b",
+    "semantic_hash": "0a61cefe26a9ff9168070a2079953e9b"
+  },
+  "Syro/scripts/init_db.py": {
+    "mtime": 1790620874.3915849,
+    "seen": 1790625474.5555644,
+    "ast_hash": "2dbc6f2e76d6e9bcde03d2287b1cb917",
+    "semantic_hash": "2dbc6f2e76d6e9bcde03d2287b1cb917"
+  },
+  "Syro/scripts/load_demo.py": {
+    "mtime": 1790622058.9615774,
+    "seen": 1790625474.555565,
+    "ast_hash": "932f19f22f37eccf3da8a03e0800af8d",
+    "semantic_hash": "932f19f22f37eccf3da8a03e0800af8d"
+  },
+  "Syro/scripts/reindex.py": {
+    "mtime": 1790621733.7525365,
+    "seen": 1790625474.555566,
+    "ast_hash": "4945a04b2e4f5f641391dc7e321ff1f0",
+    "semantic_hash": "4945a04b2e4f5f641391dc7e321ff1f0"
+  },
+  "Syro/scripts/smoke_test.py": {
+    "mtime": 1790622549.6726267,
+    "seen": 1790625474.5555673,
+    "ast_hash": "4679f07c19b8f45d3d0b11e8da0b1399",
+    "semantic_hash": "4679f07c19b8f45d3d0b11e8da0b1399"
+  },
+  "Syro/start-syro.ps1": {
+    "mtime": 1790621846.6845393,
+    "seen": 1790625474.5555682,
+    "ast_hash": "c1a8fab02394976ddd6791f5f44ba036",
+    "semantic_hash": "c1a8fab02394976ddd6791f5f44ba036"
+  },
+  "Syro/tests/__init__.py": {
+    "mtime": 1790619614.2070744,
+    "seen": 1790625474.5555692,
+    "ast_hash": "66b6fae39fc717c31283d758c369bd95",
+    "semantic_hash": "66b6fae39fc717c31283d758c369bd95"
+  },
+  "Syro/tests/conftest.py": {
+    "mtime": 1790621100.1245205,
+    "seen": 1790625474.5555701,
+    "ast_hash": "0eb8fee017be2604c4e4b143d6bc8174",
+    "semantic_hash": "0eb8fee017be2604c4e4b143d6bc8174"
+  },
+  "Syro/tests/test_chat_api.py": {
+    "mtime": 1790621121.566626,
+    "seen": 1790625474.5555713,
+    "ast_hash": "72eb78b5cd902593c507e361aa22b54b",
+    "semantic_hash": "72eb78b5cd902593c507e361aa22b54b"
+  },
+  "Syro/tests/test_crag.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5555723,
+    "ast_hash": "59fc27cb4a640d4406c0d10a15afd45b",
+    "semantic_hash": "59fc27cb4a640d4406c0d10a15afd45b"
+  },
+  "Syro/tests/test_decompose.py": {
+    "mtime": 1790621175.8330238,
+    "seen": 1790625474.5555735,
+    "ast_hash": "ff99fdd03b85a443a3e0c61c1a8a4432",
+    "semantic_hash": "ff99fdd03b85a443a3e0c61c1a8a4432"
+  },
+  "Syro/tests/test_end_to_end.py": {
+    "mtime": 1790621387.4565277,
+    "seen": 1790625474.5555742,
+    "ast_hash": "b75ed249f8fc9323c26061dd8a4dce6f",
+    "semantic_hash": "b75ed249f8fc9323c26061dd8a4dce6f"
+  },
+  "Syro/tests/test_eval_metrics.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5555754,
+    "ast_hash": "1f978b4bea80f5333b5a22bf1bbc1c24",
+    "semantic_hash": "1f978b4bea80f5333b5a22bf1bbc1c24"
+  },
+  "Syro/tests/test_extraction.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5555763,
+    "ast_hash": "66d816f3ca9c281aa33cf8f76bf92b30",
+    "semantic_hash": "66d816f3ca9c281aa33cf8f76bf92b30"
+  },
+  "Syro/tests/test_golden_set.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5555773,
+    "ast_hash": "5879600c807af7764f76bf53031b7da4",
+    "semantic_hash": "5879600c807af7764f76bf53031b7da4"
+  },
+  "Syro/tests/test_hybrid_search.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5555785,
+    "ast_hash": "0bfb9d63942e33f4c47a99eaba3c9eb3",
+    "semantic_hash": "0bfb9d63942e33f4c47a99eaba3c9eb3"
+  },
+  "Syro/tests/test_hyde.py": {
+    "mtime": 1790621157.7352285,
+    "seen": 1790625474.5555792,
+    "ast_hash": "e799227374ef8feff6c9765e12380368",
+    "semantic_hash": "e799227374ef8feff6c9765e12380368"
+  },
+  "Syro/tests/test_ingest_idempotent.py": {
+    "mtime": 1790621250.2235892,
+    "seen": 1790625474.5555804,
+    "ast_hash": "2701a3609cd89c24f2626aba47d8c7af",
+    "semantic_hash": "2701a3609cd89c24f2626aba47d8c7af"
+  },
+  "Syro/tests/test_ingestion_pipeline.py": {
+    "mtime": 1790621250.2245243,
+    "seen": 1790625474.555581,
+    "ast_hash": "2a6e9245ba3b85fc72358c21d4d7c1a9",
+    "semantic_hash": "2a6e9245ba3b85fc72358c21d4d7c1a9"
+  },
+  "Syro/tests/test_langfuse_tracer.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5555823,
+    "ast_hash": "78e12f0cf890e742c61d380ef50c3aa1",
+    "semantic_hash": "78e12f0cf890e742c61d380ef50c3aa1"
+  },
+  "Syro/tests/test_llm_prompt.py": {
+    "mtime": 1790621333.5765264,
+    "seen": 1790625474.5555832,
+    "ast_hash": "a73505e07e7855d3042917cfa73cc21c",
+    "semantic_hash": "a73505e07e7855d3042917cfa73cc21c"
+  },
+  "Syro/tests/test_query_rewriter.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5555842,
+    "ast_hash": "302ad2eab61e01e14cd7d2e89ba6b22f",
+    "semantic_hash": "302ad2eab61e01e14cd7d2e89ba6b22f"
+  },
+  "Syro/tests/test_reranker.py": {
+    "mtime": 1790621333.5754452,
+    "seen": 1790625474.5555956,
+    "ast_hash": "bc5c54bc84a11c2be94f695de3c4a658",
+    "semantic_hash": "bc5c54bc84a11c2be94f695de3c4a658"
+  },
+  "Syro/tests/test_retrieval_corpus.py": {
+    "mtime": 1790621280.196525,
+    "seen": 1790625474.5555964,
+    "ast_hash": "941e3cf4a661283f9c0e8b0629a81296",
+    "semantic_hash": "941e3cf4a661283f9c0e8b0629a81296"
+  },
+  "Syro/tests/test_retrieval_filters.py": {
+    "mtime": 1790621280.1925251,
+    "seen": 1790625474.5555973,
+    "ast_hash": "4a0f527445652227eeb80dc46ad0f07d",
+    "semantic_hash": "4a0f527445652227eeb80dc46ad0f07d"
+  },
+  "Syro/tests/test_retrieval_gate.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5555983,
+    "ast_hash": "600071d2b84d53e865f8ad9c47e92fe7",
+    "semantic_hash": "600071d2b84d53e865f8ad9c47e92fe7"
+  },
+  "Syro/tests/test_security_config.py": {
+    "mtime": 1790621157.740522,
+    "seen": 1790625474.5555995,
+    "ast_hash": "42247a7b5e44bfb98c5681e178f89d19",
+    "semantic_hash": "42247a7b5e44bfb98c5681e178f89d19"
+  },
+  "Syro/tests/test_self_rag.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5556004,
+    "ast_hash": "874250f28105136d0422256dacdf25e1",
+    "semantic_hash": "874250f28105136d0422256dacdf25e1"
+  },
+  "Syro/tests/test_semantic_cache.py": {
+    "mtime": 1790621157.7349873,
+    "seen": 1790625474.5556014,
+    "ast_hash": "2211dd80d755ee789dc223ac30262995",
+    "semantic_hash": "2211dd80d755ee789dc223ac30262995"
+  },
+  "Syro/tests/test_sse.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5556026,
+    "ast_hash": "b04f935edf0a5d8c84aeb15b0ac8ab93",
+    "semantic_hash": "b04f935edf0a5d8c84aeb15b0ac8ab93"
+  },
+  "Syro/tests/test_tune.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5556035,
+    "ast_hash": "25efed5f45eabc221db57227db438fc1",
+    "semantic_hash": "25efed5f45eabc221db57227db438fc1"
+  },
+  "Syro/tests/test_vector_store.py": {
+    "mtime": 1790621387.4553769,
+    "seen": 1790625474.5556045,
+    "ast_hash": "338ad1bd233a6afe64bf2bd5103f20f1",
+    "semantic_hash": "338ad1bd233a6afe64bf2bd5103f20f1"
+  },
+  "Syro/worker/__init__.py": {
+    "mtime": 1790619614.207397,
+    "seen": 1790625474.5556054,
+    "ast_hash": "7df235990ee7aefdada1894f197b2bab",
+    "semantic_hash": "7df235990ee7aefdada1894f197b2bab"
+  },
+  "Syro/worker/main.py": {
+    "mtime": 1790622294.6496596,
+    "seen": 1790625474.5556066,
+    "ast_hash": "34277be32301156ba73ce70779eb5a29",
+    "semantic_hash": "34277be32301156ba73ce70779eb5a29"
+  },
+  "Syro/worker/tasks.py": {
+    "mtime": 1790621755.121572,
+    "seen": 1790625474.5556076,
+    "ast_hash": "12d71fca92d20cddfb392a23a8704073",
+    "semantic_hash": "12d71fca92d20cddfb392a23a8704073"
+  },
+  ".github/workflows/ci.yml": {
+    "mtime": 1790621835.95285,
+    "seen": 1790625474.5556085,
+    "ast_hash": "fcdf1758ef4f06eaec7257a16b8c7c7f",
+    "semantic_hash": "fcdf1758ef4f06eaec7257a16b8c7c7f"
+  },
+  "CHANGEMENTS/ADR-001-multidomaine.md": {
+    "mtime": 1790622508.816614,
+    "seen": 1790625474.5556097,
+    "ast_hash": "6e72806df2604062c58700bc236e8b85",
+    "semantic_hash": "6e72806df2604062c58700bc236e8b85"
+  },
+  "CHANGEMENTS/ADR-002-collection-unique.md": {
+    "mtime": 1790622481.8645554,
+    "seen": 1790625474.5556107,
+    "ast_hash": "b8aecbbcd1c4750f174b31ef59844477",
+    "semantic_hash": "b8aecbbcd1c4750f174b31ef59844477"
+  },
+  "CHANGEMENTS/CHANGEMENTS.md": {
+    "mtime": 1790622499.8765392,
+    "seen": 1790625474.5556116,
+    "ast_hash": "3fe224bc651952fac205362484ba6f0a",
+    "semantic_hash": "3fe224bc651952fac205362484ba6f0a"
+  },
+  "CHANGEMENTS/ROADMAP_RAG.md": {
+    "mtime": 1790622499.8773093,
+    "seen": 1790625474.5556123,
+    "ast_hash": "353d4f0f7454dd2b0ccefaada173ef54",
+    "semantic_hash": "353d4f0f7454dd2b0ccefaada173ef54"
+  },
+  "CHANGEMENTS/diagnostic-chat-500.md": {
+    "mtime": 1790619614.1981156,
+    "seen": 1790625474.5556135,
+    "ast_hash": "ed42fa4ecd6cde073814e264ad8205f7",
+    "semantic_hash": "ed42fa4ecd6cde073814e264ad8205f7"
+  },
+  "CONTRIBUTING.md": {
+    "mtime": 1790622481.8679874,
+    "seen": 1790625474.5556147,
+    "ast_hash": "7677885e078969e6417b5130a8996cec",
+    "semantic_hash": "7677885e078969e6417b5130a8996cec"
+  },
+  "README.md": {
+    "mtime": 1790622518.8449087,
+    "seen": 1790625474.5556157,
+    "ast_hash": "f5186e484d8838d68e50200e2e719040",
+    "semantic_hash": "f5186e484d8838d68e50200e2e719040"
+  },
+  "Syro/README.md": {
+    "mtime": 1790622443.0405543,
+    "seen": 1790625474.5556169,
+    "ast_hash": "7d2227eec2c86fa36f5452d6c35795a1",
+    "semantic_hash": "7d2227eec2c86fa36f5452d6c35795a1"
+  },
+  "Syro/docker-compose.yml": {
+    "mtime": 1790621702.4662292,
+    "seen": 1790625474.5556178,
+    "ast_hash": "66c76065f2a1dc27838513a165e29184",
+    "semantic_hash": "66c76065f2a1dc27838513a165e29184"
+  },
+  "Syro/evaluation/requirements-eval.txt": {
+    "mtime": 1790619614.1996794,
+    "seen": 1790625474.5556188,
+    "ast_hash": "1444a9a37e783acae859771ffd7fada4",
+    "semantic_hash": "1444a9a37e783acae859771ffd7fada4"
+  },
+  "Syro/frontend/index.html": {
+    "mtime": 1790619614.200934,
+    "seen": 1790625474.55562,
+    "ast_hash": "2c45166d92eb9ca5ae4c89fa236584d2",
+    "semantic_hash": "2c45166d92eb9ca5ae4c89fa236584d2"
+  },
+  "Syro/infra/docker-compose.langfuse.yml": {
+    "mtime": 1790622508.8155668,
+    "seen": 1790625474.555621,
+    "ast_hash": "ffcf3935d9043e5cd43d6ad95323d8af",
+    "semantic_hash": "ffcf3935d9043e5cd43d6ad95323d8af"
+  },
+  "Syro/infra/prometheus/prometheus.yml": {
+    "mtime": 1790622508.8158424,
+    "seen": 1790625474.5556219,
+    "ast_hash": "1f3426f50aaa50220133c4a49a8a401e",
+    "semantic_hash": "1f3426f50aaa50220133c4a49a8a401e"
+  },
+  "Syro/requirements-dev.txt": {
+    "mtime": 1790621539.8113034,
+    "seen": 1790625474.5556228,
+    "ast_hash": "817558076e1dc04f2c97b91291c62830",
+    "semantic_hash": "817558076e1dc04f2c97b91291c62830"
+  },
+  "Syro/requirements-ml.txt": {
+    "mtime": 1790621539.8085315,
+    "seen": 1790625474.555624,
+    "ast_hash": "acfb13cbe82bf0cc89ff824438f95c18",
+    "semantic_hash": "acfb13cbe82bf0cc89ff824438f95c18"
+  },
+  "Syro/requirements.txt": {
+    "mtime": 1790621539.8072712,
+    "seen": 1790625474.5556276,
+    "ast_hash": "03081c5a212928f4269326dc33404c17",
+    "semantic_hash": "03081c5a212928f4269326dc33404c17"
+  },
+  "docs/architecture.md": {
+    "mtime": 1790622481.8637547,
+    "seen": 1790625474.5556288,
+    "ast_hash": "611b2c717a88dd686609df1da512102c",
+    "semantic_hash": "611b2c717a88dd686609df1da512102c"
+  }
+}
